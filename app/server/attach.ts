@@ -11,6 +11,8 @@ import { WS_PATH } from '../src/shared/protocol.js';
 import type { MapState } from '../src/shared/mapObjects.js';
 import { RoomManager } from './Rooms.js';
 import { attachHttpIo } from './HttpIo.js';
+import { clientIp } from './Admin.js';
+import { recordSession } from './Stats.js';
 
 export interface GameAttachment {
   rooms: RoomManager;
@@ -46,6 +48,8 @@ export function attachGame(httpServer: HttpServer, opts: AttachOptions): GameAtt
     // Accepte /ws exact ET tout chemin se terminant par /ws (proxies préfixés).
     if (pathname === WS_PATH || pathname.endsWith(WS_PATH)) {
       const game = rooms.resolve(roomId).game;
+      // Statistiques de fréquentation : 1 connexion = 1 session de jeu.
+      recordSession(clientIp(req));
       wss.handleUpgrade(req, socket, head, (ws) => {
         game.handleConnection(ws);
       });

@@ -18,6 +18,12 @@ import { Panel, TacticalButton } from '../ui/components';
 const TOKEN_KEY = 'strike-admin-token';
 
 interface Overview {
+  stats?: {
+    totalSessions: number;
+    uniquePlayers: number;
+    today: number;
+    last7: { day: string; sessions: number }[];
+  };
   rooms: { id: string; name: string; mapName: string; humans: number; bots: number; phase: string }[];
   maps: { slug: string; name: string; author: string; createdAt: number; objectCount: number; baseEditCount: number }[];
   uploads: { models: { count: number; bytes: number }; textures: { count: number; bytes: number } };
@@ -149,6 +155,56 @@ export default function AdminScreen() {
 
             {authed && data && (
               <>
+                {/* ---- Fréquentation ---- */}
+                {data.stats && (
+                  <div className="mt-5 border-t border-line pt-4">
+                    <p className="text-[13px] font-semibold uppercase tracking-[0.16em] text-text-hi">
+                      FRÉQUENTATION
+                    </p>
+                    <div className="mt-2 flex gap-3">
+                      {(
+                        [
+                          [data.stats.uniquePlayers, 'JOUEURS UNIQUES'],
+                          [data.stats.totalSessions, 'SESSIONS DE JEU'],
+                          [data.stats.today, "AUJOURD'HUI"],
+                        ] as [number, string][]
+                      ).map(([value, label]) => (
+                        <div
+                          key={label}
+                          className="chamfer-6 flex-1 border border-line bg-[rgba(13,19,26,0.6)] px-3 py-2 text-center"
+                        >
+                          <p className="font-display text-[22px] font-bold text-amber [font-variant-numeric:tabular-nums]">
+                            {value.toLocaleString('fr-FR')}
+                          </p>
+                          <p className="text-[9px] uppercase tracking-[0.16em] text-text-dim">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {data.stats.last7.length > 0 && (
+                      <div className="mt-2 flex items-end gap-1.5">
+                        {data.stats.last7.map((d) => {
+                          const max = Math.max(...data.stats!.last7.map((x) => x.sessions), 1);
+                          return (
+                            <div key={d.day} className="flex flex-1 flex-col items-center gap-0.5">
+                              <span className="text-[9px] text-text-mid [font-variant-numeric:tabular-nums]">
+                                {d.sessions}
+                              </span>
+                              <span
+                                className="w-full bg-[rgba(245,158,31,0.45)]"
+                                style={{ height: `${Math.max(3, Math.round((d.sessions / max) * 36))}px` }}
+                              />
+                              <span className="text-[8px] uppercase text-text-dim">{d.day.slice(5)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-text-dim">
+                      1 session = 1 connexion à une partie · joueurs uniques par empreinte anonyme
+                    </p>
+                  </div>
+                )}
+
                 {/* ---- Salons ---- */}
                 <div className="mt-5 border-t border-line pt-4">
                   <p className="text-[13px] font-semibold uppercase tracking-[0.16em] text-text-hi">

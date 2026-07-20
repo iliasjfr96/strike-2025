@@ -19,6 +19,7 @@ import { RateLimiter, clientIp, isAdminReq, logAdminTokenHint } from './Admin.js
 import { attachGame } from './attach.js';
 import { loadMainMapState, saveMainMapState } from './CustomMap.js';
 import { deleteMap, listMaps, loadMap, publishMap } from './MapLibrary.js';
+import { playStats } from './Stats.js';
 
 // État d'édition du salon principal (chargé avant la création des salons).
 const MAIN_MAP_STATE = loadMainMapState();
@@ -510,7 +511,7 @@ const server = createServer((req, res) => {
         return;
       }
 
-      // Vue d'ensemble : salons, maps publiées, uploads, salon principal.
+      // Vue d'ensemble : salons, maps publiées, uploads, salon principal, stats.
       if (pathname === '/admin/overview' || pathname.endsWith('/admin/overview')) {
         if (!requireAdmin(req, res)) return;
         const main = attachment.rooms.main.game.mapState;
@@ -518,6 +519,7 @@ const server = createServer((req, res) => {
         res.end(
           JSON.stringify({
             ok: true,
+            stats: playStats(),
             rooms: attachment.rooms.list(),
             maps: listMaps(),
             uploads: {
