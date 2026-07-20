@@ -9,4 +9,6 @@ npm ci
 npm run build
 systemctl restart strike2025
 sleep 2
-echo "Service : $(systemctl is-active strike2025) — $(curl -s http://127.0.0.1:3000/healthz)"
+# Le port vient du service (3000 par défaut, autre si le VPS héberge déjà des apps).
+PORT=$(grep -oP 'Environment=PORT=\K[0-9]+' /etc/systemd/system/strike2025.service 2>/dev/null || echo 3000)
+echo "Service : $(systemctl is-active strike2025) — $(curl -s "http://127.0.0.1:${PORT}/healthz")"
