@@ -1,0 +1,290 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   STRIKE 2025 — styles globaux (design.md §3 tokens, §6 surfaces, §8 curseur)
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* Tokens couleurs — design.md §3 */
+    --bg-abyss: #06090C;
+    --bg-deep: #0A0F14;
+    --panel: rgba(13, 19, 26, 0.72);
+    --panel-solid: #0D131A;
+    --panel-raise: #131B24;
+    --line: rgba(127, 168, 201, 0.20);
+    --line-strong: rgba(127, 168, 201, 0.45);
+    --steel: #7FA8C9;
+    --spectre: #58A6E8;
+    --amber: #F59E1F;
+    --ravage: #F07F13;
+    --text-hi: #EAF0F5;
+    --text-mid: #9AA9B6;
+    --text-dim: #5B6B79;
+    --danger: #E5484D;
+    --ok: #7BC47F;
+    --hit-kill: #FF5A1F;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--bg-abyss);
+    color: var(--text-hi);
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden; /* aucun scroll sur aucun écran (design.md §2) */
+    -webkit-font-smoothing: antialiased;
+    /* §8 — curseur custom hors jeu : réticule SVG 28 px (hotspot centré) */
+    cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg stroke='%23EAF0F5' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M14 3v8M14 17v8M3 14h8M17 14h8'/%3E%3C/g%3E%3Ccircle cx='14' cy='14' r='1.6' fill='%23EAF0F5'/%3E%3C/svg%3E") 14 14, auto;
+  }
+
+  /* §8 — variante ambre au survol d'un interactif */
+  a,
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea,
+  label,
+  [data-interactive] {
+    cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg stroke='%23F59E1F' stroke-width='1.5' stroke-linecap='square'%3E%3Cpath d='M14 3v8M14 17v8M3 14h8M17 14h8'/%3E%3C/g%3E%3Ccircle cx='14' cy='14' r='1.6' fill='%23F59E1F'/%3E%3C/svg%3E") 14 14, pointer;
+  }
+
+  /* Champs texte : caret ambre, texte saisi display */
+  input {
+    caret-color: var(--amber);
+  }
+
+  ::selection {
+    background: rgba(245, 158, 31, 0.35);
+    color: var(--text-hi);
+  }
+
+  /* §8 — focus clavier : outline 1 px ambre offset 2 px */
+  :focus-visible {
+    outline: 1px solid var(--amber);
+    outline-offset: 2px;
+  }
+
+  /* §7 — prefers-reduced-motion : durées x 0, boucles décoratives coupées */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .grain-overlay,
+    .sweep-light-band,
+    .scanlines-overlay {
+      display: none !important;
+    }
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------------
+     §5 — Grille technique de fond (menus) : trame 48 px + croix
+     ------------------------------------------------------------------ */
+  .tech-grid {
+    background-image:
+      radial-gradient(circle at center, rgba(127, 168, 201, 0.05) 0 1px, transparent 1px),
+      repeating-linear-gradient(0deg, rgba(127, 168, 201, 0.04) 0 1px, transparent 1px 48px),
+      repeating-linear-gradient(90deg, rgba(127, 168, 201, 0.04) 0 1px, transparent 1px 48px);
+    background-size: 48px 48px, 48px 48px, 48px 48px;
+  }
+
+  /* ------------------------------------------------------------------
+     §3 — Dégradés signatures
+     ------------------------------------------------------------------ */
+  .scrim-cinema {
+    background: linear-gradient(90deg, rgba(6, 9, 12, 0.92) 0%, rgba(6, 9, 12, 0.55) 45%, rgba(6, 9, 12, 0.15) 100%);
+  }
+
+  .glow-amber {
+    background: radial-gradient(closest-side, rgba(245, 158, 31, 0.14), transparent);
+  }
+
+  .glow-steel {
+    background: radial-gradient(closest-side, rgba(88, 166, 232, 0.10), transparent);
+  }
+
+  .vignette-hud {
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(4, 6, 8, 0.55) 100%);
+  }
+
+  .vignette-danger {
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(229, 72, 77, 0.35) 100%);
+  }
+
+  /* ------------------------------------------------------------------
+     §6 — Overlays permanents d'ambiance (pointer-events: none)
+     ------------------------------------------------------------------ */
+  .scanlines-overlay {
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.10) 0 1px, transparent 1px 3px);
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+  }
+
+  .grain-overlay {
+    /* Bruit SVG feTurbulence en data-URI, opacité 0.05, animé steps(2) 800 ms */
+    background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 240px 240px;
+    opacity: 0.05;
+    animation: grain-shift 800ms steps(2, jump-none) infinite;
+  }
+
+  .sweep-light-band {
+    background: linear-gradient(180deg, transparent, rgba(127, 168, 201, 0.05), transparent);
+    height: 120px;
+  }
+
+  /* ------------------------------------------------------------------
+     §5 — Chanfreins (coupe 45°, rayons 0 partout)
+     ------------------------------------------------------------------ */
+  .chamfer-6 {
+    clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+  }
+
+  .chamfer-8 {
+    clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+  }
+
+  .chamfer-14 {
+    clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+  }
+
+  .chamfer-16 {
+    clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+  }
+
+  .chamfer-20 {
+    clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 20px), calc(100% - 20px) 100%, 20px 100%, 0 calc(100% - 20px), 0 20px);
+  }
+
+  /* Bouton JOUER : chanfrein 16 px haut-gauche + bas-droit uniquement */
+  .chamfer-hero {
+    clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+  }
+
+  /* Champ INDICATIF : chanfrein 8 px bas-droit uniquement (menu.md B) */
+  .chamfer-br-8 {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  }
+
+  /* ------------------------------------------------------------------
+     §6 — Panneau standard (glass) + variante active
+     ------------------------------------------------------------------ */
+  .panel-surface {
+    background: var(--panel);
+    backdrop-filter: blur(12px) saturate(1.1);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    border: 1px solid var(--line);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .panel-surface-active {
+    background: var(--panel-raise);
+    border-color: var(--line-strong);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 0 24px rgba(245, 158, 31, 0.12);
+  }
+
+  /* ------------------------------------------------------------------
+     §6 — Séparateur : ligne 1 px --line + segment central 48 px ambre
+     ------------------------------------------------------------------ */
+  .separator-tactical {
+    position: relative;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .separator-tactical::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 48px;
+    height: 1px;
+    background: var(--amber);
+  }
+
+  /* ------------------------------------------------------------------
+     §10 — Slider (paramètres) : rail 2 px, curseur losange 14 px ambre
+     ------------------------------------------------------------------ */
+  .slider-tactical {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 14px;
+    background: transparent;
+  }
+
+  .slider-tactical::-webkit-slider-runnable-track {
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      var(--amber) 0 var(--fill, 50%),
+      var(--line) var(--fill, 50%) 100%
+    );
+  }
+
+  .slider-tactical::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -6px;
+    background: var(--amber);
+    border: none;
+    transform: rotate(45deg);
+    transition: transform 90ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .slider-tactical:active::-webkit-slider-thumb {
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  .slider-tactical::-moz-range-track {
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      var(--amber) 0 var(--fill, 50%),
+      var(--line) var(--fill, 50%) 100%
+    );
+  }
+
+  .slider-tactical::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--amber);
+    border: none;
+    border-radius: 0;
+    transform: rotate(45deg);
+    transition: transform 90ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .slider-tactical:active::-moz-range-thumb {
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  /* Graduations tous les 10 % sous le rail */
+  .slider-ticks {
+    height: 4px;
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--line-strong) 0 1px,
+      transparent 1px 10%
+    );
+  }
+}

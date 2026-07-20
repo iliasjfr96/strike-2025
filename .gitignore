@@ -1,0 +1,25 @@
+# Dépendances / builds
+node_modules/
+app/dist/
+app/dist-server/
+
+# Données d'exécution du serveur — NE JAMAIS VERSIONNER :
+# contient le code admin (admin-token.txt) + les maps/imports des joueurs.
+app/data/
+
+# Caches / artefacts de dev
+app/.npm-cache/
+app/.npm-cache-official/
+app/.dev-server/
+
+# Logs
+*.log
+
+# Outillage local (IA / éditeur)
+.claude/
+.agents/
+
+# Copie accidentelle du projet + assets bruts téléchargés
+Kimi_Agent_Jeu FPS multijoueur WebSocket/
+_incoming_kestrel_r4/
+_incoming_weapons_0106/

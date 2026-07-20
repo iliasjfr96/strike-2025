@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" role="img" aria-label="STRIKE 2025">
+  <!-- Wordmark STRIKE 2025 — capitales condensées militaires à gabarit pochoir,
+       angles chanfreinés (linejoin bevel), « STRIKE » blanc cassé #EAF0F5,
+       « 2025 » ambre #F59E1F, chevron double « » » avant le S. Fond transparent. -->
+  <defs>
+    <g id="glyph-s">
+      <path d="M34 8 L8 8 L8 28 L15 28 M25 28 L34 28 L34 56 L8 56 L8 44" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-t">
+      <path d="M4 8 L38 8 M21 8 L21 56" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-r">
+      <path d="M8 56 L8 8 L30 8 L30 28 L8 28 M17 28 L22 28 M27 28 L34 56" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-i">
+      <path d="M10 8 L28 8 M19 8 L19 56 M10 56 L28 56" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-k">
+      <path d="M8 8 L8 56 M34 8 L22 22 M16 28 L8 36 M20 32 L34 56" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-e">
+      <path d="M34 8 L8 8 L8 56 L34 56 M8 30 L14 30 M22 30 L28 30" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-2">
+      <path d="M8 8 L34 8 L34 26 L25 37 M18 44 L8 56 L34 56" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-0">
+      <path d="M12 8 L18 8 M26 8 L30 8 L36 14 L36 50 L30 56 L12 56 L6 50 L6 14 Z" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+    <g id="glyph-5">
+      <path d="M34 8 L8 8 L8 28 L15 28 M25 28 L34 28 L34 56 L8 56 L8 46" fill="none" stroke-width="9" stroke-linejoin="bevel" stroke-linecap="square"/>
+    </g>
+  </defs>
+
+  <!-- Chevron double « » » intégré avant le S (ambre) -->
+  <g transform="translate(38,48)" stroke="#F59E1F">
+    <path d="M0 12 L13 32 L0 52" fill="none" stroke-width="8" stroke-linejoin="bevel" stroke-linecap="square"/>
+    <path d="M15 12 L28 32 L15 52" fill="none" stroke-width="8" stroke-linejoin="bevel" stroke-linecap="square"/>
+  </g>
+
+  <!-- STRIKE (blanc cassé) -->
+  <g transform="translate(90,48)" stroke="#EAF0F5">
+    <use href="#glyph-s" x="0"/>
+    <use href="#glyph-t" x="48"/>
+    <use href="#glyph-r" x="96"/>
+    <use href="#glyph-i" x="144"/>
+    <use href="#glyph-k" x="192"/>
+    <use href="#glyph-e" x="240"/>
+  </g>
+
+  <!-- 2025 (ambre) -->
+  <g transform="translate(398,48)" stroke="#F59E1F">
+    <use href="#glyph-2" x="0"/>
+    <use href="#glyph-0" x="48"/>
+    <use href="#glyph-2" x="96"/>
+    <use href="#glyph-5" x="144"/>
+  </g>
+
+  <!-- Micro-trait de soulignement ambre (signature) -->
+  <path d="M398 128 L590 128" stroke="#F59E1F" stroke-width="4" stroke-linecap="square" opacity="0.85"/>
+</svg>

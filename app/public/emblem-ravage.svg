@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="RAVAGE">
+  <!-- Emblème faction RAVAGE : trois griffes diagonales agressives stylisées
+       dans un triangle brisé, orange #F07F13, tactique minimal. -->
+  <g fill="none" stroke="#F07F13" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Triangle brisé (contour ouvert en deux endroits) -->
+    <path d="M64 18 L108 102 L74 102" stroke-width="2.5"/>
+    <path d="M52 102 L20 102 L52 44" stroke-width="2.5"/>
+    <!-- Trois griffes diagonales (traits épais agressifs) -->
+    <path d="M42 46 L72 96" stroke-width="5.5"/>
+    <path d="M56 38 L86 88" stroke-width="5.5"/>
+    <path d="M70 30 L100 80" stroke-width="5.5"/>
+  </g>
+</svg>

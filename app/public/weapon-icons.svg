@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- STRIKE 2025 — sprite d'icônes killfeed (design.md §12 note implémentation).
+       Silhouettes 1 couleur (fill="currentColor") dérivées des rendus d'armes.
+       Usage : <svg><use href="/weapon-icons.svg#icon-vsk27"/></svg> -->
+
+  <!-- VSK-27 : fusil d'assaut bullpup -->
+  <symbol id="icon-vsk27" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M1 15 L4 10 L14 10 L16 7 L24 7 L24 10 L40 10 L40 8 L46 8 L46 10 L62 10 L62 13 L46 13 L46 15 L40 15 L38 21 L31 21 L29 15 L25 15 L23 23 L14 23 L12 15 Z M18 12 L20 15 L22 12 Z"/>
+  </symbol>
+
+  <!-- KV-9 : pistolet-mitrailleur compact -->
+  <symbol id="icon-kv9" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M6 14 L8 9 L18 9 L20 7 L27 7 L27 9 L44 9 L44 8 L48 8 L48 10 L56 10 L56 12 L48 12 L48 13 L34 13 L36 20 L29 20 L27 13 L24 13 L22 22 L13 22 L11 13 L6 13 Z"/>
+  </symbol>
+
+  <!-- LR-50 : fusil de précision long -->
+  <symbol id="icon-lr50" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M0 15 L3 11 L14 11 L14 8 L26 8 L26 6 L34 6 L34 8 L38 8 L38 11 L60 11 L60 10 L63 10 L63 13 L60 13 L60 12 L38 12 L36 16 L30 16 L28 12 L22 12 L20 19 L12 19 L10 15 Z"/>
+  </symbol>
+
+  <!-- P9 : pistolet de service -->
+  <symbol id="icon-p9" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M14 11 L16 7 L40 7 L40 5 L44 5 L44 7 L48 7 L48 12 L34 12 L32 21 L22 21 L20 12 L14 12 Z"/>
+  </symbol>
+
+  <!-- Headshot : crâne stylisé dans une mire -->
+  <symbol id="icon-headshot" viewBox="0 0 24 24">
+    <path fill="currentColor" fill-rule="evenodd" d="M12 2 A10 10 0 1 0 22 12 A10 10 0 1 0 12 2 Z M12 5 A7 7 0 1 1 5 12 A7 7 0 1 1 12 5 Z"/>
+    <path fill="currentColor" d="M11 0 L13 0 L13 5 L11 5 Z M11 19 L13 19 L13 24 L11 24 Z M0 11 L5 11 L5 13 L0 13 Z M19 11 L24 11 L24 13 L19 13 Z"/>
+    <circle fill="currentColor" cx="12" cy="12" r="2.4"/>
+  </symbol>
+</svg>

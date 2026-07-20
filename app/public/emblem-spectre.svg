@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="SPECTRE">
+  <!-- Emblème faction SPECTRE : hexagone cintré abstrait évoquant un œil /
+       un fantôme, contour fin bleu acier #58A6E8, tactique minimal 1 trait. -->
+  <g fill="none" stroke="#58A6E8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Hexagone cintré (flancs légèrement incurvés) -->
+    <path d="M64 12 Q86 22 106 36 Q110 60 106 84 Q86 106 64 116 Q42 106 22 84 Q18 60 22 36 Q42 22 64 12 Z"/>
+    <!-- Œil / fantôme : amande centrale -->
+    <path d="M34 62 Q64 40 94 62 Q64 84 34 62 Z"/>
+    <!-- Pupille -->
+    <circle cx="64" cy="62" r="7"/>
+    <!-- Traîne spectrale : deux courbes descendantes -->
+    <path d="M52 92 Q50 102 46 108"/>
+    <path d="M76 92 Q78 102 82 108"/>
+  </g>
+</svg>
