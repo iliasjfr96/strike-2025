@@ -40,10 +40,11 @@ export const HISTORY_SIZE = 15;
 /** Âge max d'un état d'historique réutilisable pour le rewind (ms). */
 export const HISTORY_MAX_AGE_MS = 500;
 
-/** Joueurs humains max dans la room. */
-export const MAX_PLAYERS = 12;
-/** Taille d'équipe cible : les bots complètent jusqu'à 4v4. */
-export const TEAM_TARGET_SIZE = 4;
+/** Joueurs humains max dans la room (2 équipes de 8). */
+export const MAX_PLAYERS = 16;
+/** Taille d'équipe cible PAR DÉFAUT (8v8) — réglable par pack via
+ *  gameMode.teamSize (1..8), les bots complètent. */
+export const TEAM_TARGET_SIZE = 8;
 /** Port d'écoute par défaut du serveur (process.env.PORT || DEFAULT_PORT). */
 export const DEFAULT_PORT = 3000;
 /** Chemin WebSocket (upgrade HTTP accepté UNIQUEMENT sur ce path). */
@@ -303,6 +304,8 @@ export interface GameModeConfig {
   bombTimeS?: number;
   /** sad : rounds gagnés pour remporter le match. */
   roundsToWin?: number;
+  /** TOUS modes : taille des équipes (1..8) — les bots complètent. */
+  teamSize?: number;
 }
 
 /** État d'une zone de capture (domination). */

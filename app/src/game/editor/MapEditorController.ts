@@ -910,10 +910,33 @@ export class MapEditorController {
     this.applyLocal();
   }
 
-  /** Change le MODE DE JEU du pack ('tdm' = retour au mode classique). */
+  /** Change le MODE DE JEU du pack ('tdm' = retour au mode classique —
+   *  la taille d'équipe éventuelle est conservée). */
   setGameMode(type: 'tdm' | 'dom' | 'sad'): void {
-    if (type === 'tdm') this.gameMode = undefined;
-    else this.gameMode = { ...(this.gameMode ?? {}), type };
+    if (type === 'tdm') {
+      const ts = this.gameMode?.teamSize;
+      this.gameMode = ts !== undefined ? { type: 'tdm', teamSize: ts } : undefined;
+    } else {
+      this.gameMode = { ...(this.gameMode ?? {}), type };
+    }
+    this.dirty = true;
+    this.emit();
+  }
+
+  /** Taille des équipes (1..8) — 8 (défaut) retire le réglage du pack. */
+  setTeamSize(v: number): void {
+    const val = Math.round(Math.min(8, Math.max(1, v)));
+    if (val === 8) {
+      if (this.gameMode) {
+        delete this.gameMode.teamSize;
+        // Un pack tdm sans AUCUN réglage redevient « pas de mode ».
+        if (this.gameMode.type === 'tdm' && Object.keys(this.gameMode).length === 1) {
+          this.gameMode = undefined;
+        }
+      }
+    } else {
+      this.gameMode = { ...(this.gameMode ?? { type: 'tdm' }), teamSize: val };
+    }
     this.dirty = true;
     this.emit();
   }

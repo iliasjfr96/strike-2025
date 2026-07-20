@@ -634,7 +634,8 @@ async function main(): Promise<void> {
 
     // ---- 7. Bots serveur (2e instance SANS STRIKE_DISABLE_BOTS) ----------------------
     console.log('\n[7] Bots serveur (remplissage 4v4)');
-    const server2 = startServer(PORT2, { STRIKE_MATCH_DURATION_S: '120' });
+    // STRIKE_TEAM_SIZE=4 : le défaut du jeu est 8v8, le scénario teste en 4v4.
+    const server2 = startServer(PORT2, { STRIKE_MATCH_DURATION_S: '120', STRIKE_TEAM_SIZE: '4' });
     children.push(server2);
     const botClients: TestClient[] = [];
     try {

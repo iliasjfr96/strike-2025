@@ -226,6 +226,30 @@ export default function MapEditorScreen() {
                 <span className="text-[11px] text-text-dim">%</span>
               </span>
             </div>
+            {/* Taille des équipes (bots compléteront) — tous modes. */}
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-dim">
+                JOUEURS PAR ÉQUIPE
+              </span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  step={1}
+                  value={editor.gameMode?.teamSize ?? 8}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (Number.isFinite(v)) {
+                      editor.setTeamSize(v);
+                      forceRender();
+                    }
+                  }}
+                  className="chamfer-6 w-[64px] border border-line bg-[rgba(6,9,12,0.7)] px-1 py-0.5 text-right text-[12px] text-text-hi outline-none focus:border-line-strong"
+                />
+                <span className="text-[11px] text-text-dim">v{editor.gameMode?.teamSize ?? 8}</span>
+              </span>
+            </div>
             <div className="mt-1 flex gap-1">
               {(
                 [

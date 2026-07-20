@@ -7,7 +7,7 @@
 // ============================================================================
 
 import type { TeamId } from '../src/shared/protocol.js';
-import { TEAM_RAVAGE, TEAM_SPECTRE, TEAM_TARGET_SIZE } from '../src/shared/protocol.js';
+import { TEAM_RAVAGE, TEAM_SPECTRE } from '../src/shared/protocol.js';
 import type { Game } from './Game.js';
 import { addBot, removeBot } from './Bots.js';
 
@@ -40,18 +40,19 @@ export function makeRoomForHuman(game: Game, team: TeamId): void {
     size++;
     if (p.bot && bot === null) bot = p;
   }
-  if (size >= TEAM_TARGET_SIZE && bot !== null) {
+  if (size >= game.teamSize() && bot !== null) {
     const victim = game.players.get(bot.id);
     if (victim) removeBot(game, victim);
   }
 }
 
-/** Complète les deux équipes avec des bots jusqu'à TEAM_TARGET_SIZE. */
+/** Complète les deux équipes avec des bots jusqu'à la taille du salon. */
 export function fillWithBots(game: Game): void {
   if (game.disableBots) return;
-  for (let guard = 0; guard < 16; guard++) {
+  const target = game.teamSize();
+  for (let guard = 0; guard < 32; guard++) {
     const [c0, c1] = teamCounts(game);
-    if (c0 >= TEAM_TARGET_SIZE && c1 >= TEAM_TARGET_SIZE) return;
+    if (c0 >= target && c1 >= target) return;
     addBot(game, c0 <= c1 ? TEAM_SPECTRE : TEAM_RAVAGE);
   }
 }

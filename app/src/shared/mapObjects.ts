@@ -344,6 +344,7 @@ export const MODE_LIMITS = {
   defuseTimeS: [1, 15] as [number, number],
   bombTimeS: [10, 120] as [number, number],
   roundsToWin: [1, 15] as [number, number],
+  teamSize: [1, 8] as [number, number],
 };
 
 /** Valeurs par défaut d'un mode (appliquées quand un réglage est absent). */
@@ -357,6 +358,7 @@ export const MODE_DEFAULTS: Required<Omit<GameModeConfig, 'type'>> = {
   defuseTimeS: 6,
   bombTimeS: 40,
   roundsToWin: 4,
+  teamSize: 8,
 };
 
 /** Nombre max de zones exploitées par le serveur. */

@@ -37,6 +37,7 @@ import {
   REGEN_DELAY_S,
   REGEN_RATE,
   SCORE_TARGET,
+  TEAM_TARGET_SIZE,
   SPAWN_PROTECTION_S,
   STREAK_UAV,
   TICK_DT,
@@ -131,6 +132,15 @@ export class Game {
     this.rebuildSpawns();
   }
 
+  /** Taille d'équipe du salon : réglage du pack (1..8), sinon défaut (8v8).
+   *  Les bots complètent jusque-là et cèdent leur place aux humains. */
+  teamSize(): number {
+    const v = this.mapState.gameMode?.teamSize;
+    return typeof v === 'number' && Number.isFinite(v)
+      ? Math.min(8, Math.max(1, Math.round(v)))
+      : this.defaultTeamSize;
+  }
+
   /** Spawns effectifs d'une équipe : marqueurs du pack, sinon défauts à
    *  l'échelle de la map. */
   spawnsFor(team: TeamId): SpawnPoint[] {
@@ -217,6 +227,7 @@ export class Game {
 
   // Hooks d'environnement (usage autorisé : tests E2E — architecture.md §7).
   readonly matchDurationS = envNum('STRIKE_MATCH_DURATION_S', MATCH_DURATION_S);
+  readonly defaultTeamSize = envNum('STRIKE_TEAM_SIZE', TEAM_TARGET_SIZE);
   readonly scoreTarget = envNum('STRIKE_SCORE_TARGET', SCORE_TARGET);
   readonly spawnProtectionS = envNum('STRIKE_SPAWN_PROTECTION_S', SPAWN_PROTECTION_S);
   readonly disableBots = process.env.STRIKE_DISABLE_BOTS === '1';
