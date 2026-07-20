@@ -72,10 +72,19 @@ import { Effects } from './render/Effects';
 import { InputCapture } from './input/InputCapture';
 import { AudioEngine } from './audio/AudioEngine';
 import { MapEditorController } from './editor/MapEditorController';
-import { applyMapState, effectiveBaseBoxes } from '../shared/mapObjects';
+import {
+  MAX_BOMB_SITES,
+  MAX_CAPTURE_ZONES,
+  applyMapState,
+  effectiveBaseBoxes,
+  mapScaleFactor,
+  posInZone,
+  zoneRectsFromObjects,
+} from '../shared/mapObjects';
+import type { ZoneRect } from '../shared/mapObjects';
 import { applyLoadoutsToClient, applyWeaponModsToClient } from '../shared/weaponMods';
 import { setWeaponModelMods } from './render/WeaponModels';
-import type { BaseTerrain, ClassLoadouts, CustomPropDef, MapBaseEdit, PlacedObject, WeaponModsConfig } from '../shared/protocol';
+import type { BaseTerrain, ClassLoadouts, CustomPropDef, GameModeConfig, MapBaseEdit, PlacedObject, WeaponModsConfig } from '../shared/protocol';
 
 export type GameClientEvent = 'connected' | 'disconnected' | 'error';
 
@@ -134,6 +143,11 @@ export class GameClient {
   /** Fin d'UAV équipe (timestamp serveur, 0 = inactif). */
   private uavUntil = 0;
   private killcamState: { killerId: number; until: number } | null = null;
+  /** Mode de jeu du salon (pack) + zones utiles à l'invite E / au HUD. */
+  private gameMode: GameModeConfig | undefined;
+  private modeZones: ZoneRect[] = [];
+  /** Derniers objets placés reçus (source des zones). */
+  private lastObjects: PlacedObject[] = [];
   private readonly latestRemote = new Map<number, PlayerSnapshot>();
 
   // Armes (miroir déterministe du serveur — bridge.md §5.1)
@@ -389,12 +403,35 @@ export class GameClient {
         break;
       case 'mapObjects':
         // Édition de map mise à jour (sauvegarde d'un éditeur) : visuel +
-        // collisions + mods d'armes, en direct même en pleine partie.
-        this.applyMapObjects(msg.objects, msg.baseEdits ?? [], msg.props ?? [], msg.baseTerrain ?? 'kestrel');
+        // collisions + mods d'armes + mode, en direct même en pleine partie.
+        this.applyMapObjects(msg.objects, msg.baseEdits ?? [], msg.props ?? [], msg.baseTerrain ?? 'kestrel', msg.mapScale);
         if (msg.weaponMods) this.applyWeaponMods(msg.weaponMods, msg.loadouts ?? {});
+        this.applyGameMode(msg.gameMode);
+        break;
+      case 'mode':
+        // État du mode (zones DOM / round R&D) : store HUD + teinte des zones.
+        useGameUI.getState().engineSetModeState(msg);
+        if (msg.zones) this.mapBuilder.setZoneStates(msg.zones);
         break;
       default:
         break;
+    }
+  }
+
+  /** Applique le mode de jeu du salon : type dans le store + zones du HUD. */
+  private applyGameMode(mode: GameModeConfig | undefined): void {
+    this.gameMode = mode;
+    this.modeZones =
+      mode?.type === 'sad'
+        ? zoneRectsFromObjects(this.lastObjects, 'zone:bombsite', MAX_BOMB_SITES)
+        : mode?.type === 'dom'
+          ? zoneRectsFromObjects(this.lastObjects, 'zone:capture', MAX_CAPTURE_ZONES)
+          : [];
+    const ui = useGameUI.getState();
+    ui.engineSetModeType(mode?.type ?? 'tdm');
+    if (!mode || mode.type === 'tdm') {
+      ui.engineSetModeState(null);
+      ui.engineSetUsePrompt(null);
     }
   }
 
@@ -406,8 +443,11 @@ export class GameClient {
     baseEdits: MapBaseEdit[] = [],
     props: CustomPropDef[] = [],
     baseTerrain: BaseTerrain = 'kestrel',
+    mapScale?: number,
   ): void {
-    const state = { objects, baseEdits, props, baseTerrain };
+    this.lastObjects = objects;
+    const state = { objects, baseEdits, props, baseTerrain, mapScale };
+    this.mapBuilder.setMapScale(mapScaleFactor(state));
     applyMapState(state);
     this.mapBuilder.setTerrain(baseTerrain);
     this.mapBuilder.setBaseBoxes(effectiveBaseBoxes(state));
@@ -441,9 +481,10 @@ export class GameClient {
     // État d'édition de map autoritaire (visuel + collisions) + mods d'armes
     // du salon (AVANT resetWeapons — les chargeurs en dépendent).
     if (msg.mapObjects) {
-      this.applyMapObjects(msg.mapObjects, msg.baseEdits ?? [], msg.props ?? [], msg.baseTerrain ?? 'kestrel');
+      this.applyMapObjects(msg.mapObjects, msg.baseEdits ?? [], msg.props ?? [], msg.baseTerrain ?? 'kestrel', msg.mapScale);
     }
     this.applyWeaponMods(msg.weaponMods ?? {}, msg.loadouts ?? {});
+    this.applyGameMode(msg.gameMode);
 
     // Position locale temporaire (corrigée par le premier snapshot/respawn).
     const sp = SPAWNS[this.myTeam][0];
@@ -576,6 +617,12 @@ export class GameClient {
 
       case 'streak':
         this.onStreak(ev);
+        break;
+
+      case 'mode':
+        // Annonce FR du mode (capture de zone, bombe, round…).
+        ui.engineAddAnnouncement(ev.msg, ev.sub === 'info' ? 'info' : 'phase');
+        if (ev.sub === 'boom') this.audio.shot('lr50', 0); // boum sourd simple
         break;
 
       case 'phase':
@@ -928,6 +975,9 @@ export class GameClient {
 
       // 7. Viewmodel + pas.
       this.updateViewmodel(dt);
+
+      // 7bis. Invite d'action E (R&D : poser / désamorcer).
+      this.updateUsePrompt();
 
       // 8. Radar ~10 Hz.
       if (t - this.lastRadarT >= RADAR_MS) {
@@ -1286,6 +1336,32 @@ export class GameClient {
     } else {
       this.footAcc = 0;
     }
+  }
+
+  /** Invite E contextuelle (R&D uniquement) : poser dans un site quand on
+   *  attaque, désamorcer au site posé quand on défend. */
+  private updateUsePrompt(): void {
+    if (this.gameMode?.type !== 'sad') return; // store remis à null par applyGameMode
+    const ui = useGameUI.getState();
+    const ms = ui.modeState;
+    let prompt: string | null = null;
+    if (this.alive && ms && ms.roundPhase !== 'over') {
+      const pos = this.prediction.body.pos;
+      if (ms.roundPhase === 'live' && this.myTeam === ms.attackers) {
+        for (const z of this.modeZones) {
+          if (posInZone(pos.x, pos.y, pos.z, z)) {
+            prompt = 'MAINTENEZ [E] — POSER LA BOMBE';
+            break;
+          }
+        }
+      } else if (ms.roundPhase === 'planted' && this.myTeam !== ms.attackers) {
+        const site = this.modeZones[ms.bombSite ?? -1];
+        if (site && posInZone(pos.x, pos.y, pos.z, site)) {
+          prompt = 'MAINTENEZ [E] — DÉSAMORCER LA BOMBE';
+        }
+      }
+    }
+    ui.engineSetUsePrompt(prompt);
   }
 
   /** Radar : alliés toujours, ennemis seulement si UAV équipe actif. */

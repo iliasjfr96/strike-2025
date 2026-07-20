@@ -18,6 +18,7 @@
 import { DT_MAX } from '../../shared/protocol';
 import type { PlayerSnapshot } from '../../shared/protocol';
 import { MAP_COLLIDERS } from '../../shared/map';
+import { CLIENT_RUNTIME } from '../../shared/mapObjects';
 import {
   HEIGHT_STAND,
   makeBody,
@@ -135,7 +136,7 @@ export class Prediction {
       vy: 0,
       vz: 0,
     };
-    stepBody(this.body, input, COLLIDERS, cdt, this.speedMult);
+    stepBody(this.body, input, COLLIDERS, cdt, this.speedMult, CLIENT_RUNTIME.mapScale);
     // État post-step : référence exacte pour la réconciliation par ack.
     input.px = this.body.pos.x;
     input.py = this.body.pos.y;
@@ -244,7 +245,7 @@ export class Prediction {
     // marches) — sinon le premier input rejoué perd accel sol/saut/step-up.
     this.body.onGround = groundedAt(sx, sy, sz);
     for (const input of this.pending) {
-      stepBody(this.body, input, COLLIDERS, input.dt, this.speedMult);
+      stepBody(this.body, input, COLLIDERS, input.dt, this.speedMult, CLIENT_RUNTIME.mapScale);
     }
     this.prevX = this.body.pos.x;
     this.prevY = this.body.pos.y;

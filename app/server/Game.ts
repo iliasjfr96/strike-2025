@@ -49,7 +49,8 @@ import {
   round2,
   round3,
 } from '../src/shared/protocol.js';
-import { mapMeta } from '../src/shared/map.js';
+import { SPAWNS, mapMeta } from '../src/shared/map.js';
+import type { SpawnPoint } from '../src/shared/map.js';
 import type { AABB } from '../src/shared/sim.js';
 import { clampPitch, stepBody } from '../src/shared/sim.js';
 import { CLASS_IDS, WEAPONS } from '../src/shared/weapons.js';
@@ -59,6 +60,8 @@ import { fireShot } from './Combat.js';
 import { updateBots } from './Bots.js';
 import { fillWithBots, makeRoomForHuman, pickTeam } from './Teams.js';
 import { respawnPlayer } from './Spawns.js';
+import { buildModeEngine } from './Modes.js';
+import type { ModeEngine } from './Modes.js';
 import {
   HEARTBEAT_DEAD_MS,
   HEARTBEAT_INTERVAL_MS,
@@ -73,7 +76,12 @@ import { currentWeapon, finalStats, makePlayer, playerInfo } from './Player.js';
 import type { ServerPlayer } from './Player.js';
 import type { BotBrain } from './Bots.js';
 import type { MapState } from '../src/shared/mapObjects.js';
-import { buildColliders } from '../src/shared/mapObjects.js';
+import {
+  MAX_SPAWN_MARKERS,
+  buildColliders,
+  mapScaleFactor,
+  zoneRectsFromObjects,
+} from '../src/shared/mapObjects.js';
 import type { ClassLoadouts, WeaponId, WeaponModsConfig } from '../src/shared/protocol.js';
 import type { WeaponSpec } from '../src/shared/weapons.js';
 import { buildLoadoutTable, buildWeaponTable } from '../src/shared/weaponMods.js';
@@ -107,12 +115,42 @@ export class Game {
   loadouts: Record<ClassId, [WeaponId, WeaponId]>;
   /** Cerveaux des bots de CE salon (les ids de joueurs sont locaux au salon). */
   readonly botBrains = new Map<number, BotBrain>();
+  /** Moteur de MODE DE JEU du salon (tdm/dom/sad — défini par le pack). */
+  mode: ModeEngine;
+  /** Facteur d'échelle XZ de la map (mapScale % du pack). */
+  mapScaleF = 1;
+  /** Spawns du PACK par équipe (marqueurs 'zone:spawn0/1') — vide = défauts. */
+  private customSpawns: [SpawnPoint[], SpawnPoint[]] = [[], []];
 
   constructor(initialMapState?: MapState) {
     this.mapState = initialMapState ?? { objects: [], baseEdits: [] };
     this.colliders = buildColliders(this.mapState);
     this.weapons = buildWeaponTable(this.mapState.weaponMods ?? {});
     this.loadouts = buildLoadoutTable(this.mapState.loadouts ?? {});
+    this.mode = buildModeEngine(this, this.mapState.gameMode, this.mapState.objects);
+    this.rebuildSpawns();
+  }
+
+  /** Spawns effectifs d'une équipe : marqueurs du pack, sinon défauts à
+   *  l'échelle de la map. */
+  spawnsFor(team: TeamId): SpawnPoint[] {
+    if (this.customSpawns[team].length > 0) return this.customSpawns[team];
+    return SPAWNS[team].map((sp) => ({ ...sp, x: sp.x * this.mapScaleF, z: sp.z * this.mapScaleF }));
+  }
+
+  private rebuildSpawns(): void {
+    this.mapScaleF = mapScaleFactor(this.mapState);
+    for (const team of [0, 1] as TeamId[]) {
+      const rects = zoneRectsFromObjects(this.mapState.objects, `zone:spawn${team}`, MAX_SPAWN_MARKERS);
+      // Chaque marqueur = un point de spawn en son centre, orienté vers le
+      // centre de la map (yaw = atan2(x, z) — forward (-sin, -cos)).
+      this.customSpawns[team] = rects.map((r) => ({
+        x: r.cx,
+        y: Math.max(0, r.y),
+        z: r.cz,
+        yaw: Math.atan2(r.cx, r.cz),
+      }));
+    }
   }
 
   /** Applique un nouvel état d'édition (sauvegarde d'éditeur) : colliders
@@ -124,6 +162,11 @@ export class Game {
     for (const b of buildColliders(state)) this.colliders.push(b);
     this.weapons = buildWeaponTable(state.weaponMods ?? {});
     this.loadouts = buildLoadoutTable(state.loadouts ?? {});
+    // Nouveau moteur de mode (le pack a pu changer de mode ou de zones)
+    // + spawns/échelle du pack.
+    this.mode = buildModeEngine(this, state.gameMode, state.objects);
+    this.mode.reset(Date.now());
+    this.rebuildSpawns();
     this.broadcast({
       t: 'mapObjects',
       objects: state.objects,
@@ -132,7 +175,11 @@ export class Game {
       loadouts: state.loadouts ?? {},
       props: state.props ?? [],
       baseTerrain: state.baseTerrain ?? 'kestrel',
+      gameMode: state.gameMode,
+      mapScale: state.mapScale,
     });
+    const ms = this.mode.stateMsg();
+    if (ms) this.broadcast(ms);
   }
 
   /** Intervalle minimal entre deux tirs (ms) selon la table de CE salon. */
@@ -455,6 +502,8 @@ export class Game {
 
     this.startMatchIfNeeded();
     send(conn.ws, this.buildWelcome(p));
+    const modeState = this.mode.stateMsg();
+    if (modeState) send(conn.ws, modeState);
     this.broadcastExcept(p.id, { t: 'ev', kind: 'join', player: playerInfo(p) });
     respawnPlayer(this, p);
     fillWithBots(this); // complète jusqu'à 4v4
@@ -542,7 +591,7 @@ export class Game {
       this.maybeFinishReload(p, p.weapons[1], now);
 
       if (!p.alive) {
-        if (p.respawnAt > 0 && now >= p.respawnAt) {
+        if (p.respawnAt > 0 && now >= p.respawnAt && this.mode.allowRespawn()) {
           respawnPlayer(this, p);
         }
         continue;
@@ -571,6 +620,7 @@ export class Game {
         budget -= eff;
         p.dtBank -= eff;
         p.lastInputSeq = inp.seq;
+        p.lastKeys = inp.keys; // actions de mode (E) lues par le moteur
         p.yaw = inp.yaw;
         p.pitch = clampPitch(inp.pitch);
         stepBody(
@@ -579,6 +629,7 @@ export class Game {
           this.colliders,
           eff,
           this.weapons[p.weapons[p.slot].id].mobility,
+          this.mapScaleF,
         );
       }
 
@@ -597,6 +648,9 @@ export class Game {
         height: p.body.height,
       });
     }
+
+    // Moteur de mode (zones de capture, rounds, bombe…).
+    this.mode.tick(now);
 
     // Timer de partie.
     if (this.phase === 'playing' && now >= this.endsAt) {
@@ -639,7 +693,8 @@ export class Game {
   private startMatchIfNeeded(): void {
     if (this.phase !== 'lobby') return;
     this.phase = 'playing';
-    this.endsAt = Date.now() + this.matchDurationS * 1000;
+    this.endsAt = Date.now() + this.mode.matchDurationS() * 1000;
+    this.mode.reset(Date.now());
     this.broadcast({ t: 'ev', kind: 'phase', phase: 'playing', endsAt: this.endsAt, winner: -1, stats: [] });
   }
 
@@ -675,9 +730,12 @@ export class Game {
       respawnPlayer(this, p); // positions -> spawns, armes fraîches, ev respawn
     }
     this.phase = 'playing';
-    this.endsAt = now + this.matchDurationS * 1000;
+    this.endsAt = now + this.mode.matchDurationS() * 1000;
+    this.mode.reset(now);
     this.broadcast({ t: 'ev', kind: 'score', scores: [...this.scores] as TeamScores });
     this.broadcast({ t: 'ev', kind: 'phase', phase: 'playing', endsAt: this.endsAt, winner: -1, stats: [] });
+    const ms = this.mode.stateMsg();
+    if (ms) this.broadcast(ms);
   }
 
   // --------------------------------------------------------------------------
@@ -718,8 +776,8 @@ export class Game {
       tick: this.tick,
       config: {
         ...buildGameConfig(),
-        scoreTarget: this.scoreTarget,
-        matchDurationS: this.matchDurationS,
+        scoreTarget: this.mode.scoreTarget(),
+        matchDurationS: this.mode.matchDurationS(),
         spawnProtectionS: this.spawnProtectionS,
       },
       mapMeta: mapMeta(),
@@ -734,6 +792,8 @@ export class Game {
       loadouts: this.mapState.loadouts ?? {},
       props: this.mapState.props ?? [],
       baseTerrain: this.mapState.baseTerrain ?? 'kestrel',
+      gameMode: this.mapState.gameMode,
+      mapScale: this.mapState.mapScale,
     };
   }
 

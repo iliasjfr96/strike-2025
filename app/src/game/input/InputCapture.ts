@@ -19,6 +19,7 @@ import {
   KEY_LEFT,
   KEY_RIGHT,
   KEY_SPRINT,
+  KEY_USE,
   clampPitch,
 } from '../../shared/sim';
 
@@ -196,6 +197,8 @@ export class InputCapture {
     if (k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyC')) bits |= KEY_CROUCH;
     if (k.has('ShiftLeft') || k.has('ShiftRight')) bits |= KEY_SPRINT;
     if (this.adsHeld) bits |= KEY_ADS;
+    // E maintenu : action contextuelle des modes (poser/désamorcer la bombe).
+    if (k.has('KeyE')) bits |= KEY_USE;
     return bits;
   }
 

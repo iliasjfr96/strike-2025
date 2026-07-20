@@ -78,10 +78,18 @@ function clampNum(v: unknown, [min, max]: [number, number]): number | undefined 
 // Sanitisation (fichier disque / POST réseau)
 // ----------------------------------------------------------------------------
 
-export function sanitizeWeaponMods(raw: unknown): WeaponModsConfig {
+/**
+ * Sanitise les mods d'armes d'un pack.
+ * `allowBaseWeapons` = false (défaut) : SEULS les emplacements custom1-3 sont
+ * acceptés — les armes de BASE du jeu ne sont modifiables que par l'ADMIN
+ * (sauvegarde du salon principal, route authentifiée). Les packs publiés par
+ * les joueurs ne peuvent donc jamais altérer les armes de base.
+ */
+export function sanitizeWeaponMods(raw: unknown, allowBaseWeapons = false): WeaponModsConfig {
   const out: WeaponModsConfig = {};
   if (typeof raw !== 'object' || raw === null) return out;
   for (const id of WEAPON_IDS) {
+    if (!allowBaseWeapons && !id.startsWith('custom')) continue;
     const entryRaw = (raw as Record<string, unknown>)[id];
     if (typeof entryRaw !== 'object' || entryRaw === null) continue;
     const e = entryRaw as { stats?: unknown; model?: unknown };

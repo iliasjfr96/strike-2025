@@ -40,17 +40,25 @@ export function formatClock(totalSeconds: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+const TEAM_NAMES = ['SPECTRE', 'RAVAGE'] as const;
+const ZONE_LETTERS = 'ABCDEFGH';
+
 export default function ScoreStrip() {
   const scores = useGameUI((s) => s.scores);
   const matchEndsAt = useGameUI((s) => s.matchEndsAt);
   const serverOffsetMs = useGameUI((s) => s.serverOffsetMs);
-  const now = useNow(1000);
+  const modeType = useGameUI((s) => s.modeType);
+  const modeState = useGameUI((s) => s.modeState);
+  const now = useNow(modeType === 'sad' ? 250 : 1000);
 
+  // R&D : le chrono affiché est celui du ROUND (ou de la bombe posée).
+  const sad = modeType === 'sad' && modeState ? modeState : null;
+  const endsAtEff = sad?.roundEndsAt ?? matchEndsAt;
   const remainingS =
-    matchEndsAt > 0
-      ? Math.max(0, Math.ceil((matchEndsAt - serverOffsetMs - now) / 1000))
+    endsAtEff > 0
+      ? Math.max(0, Math.ceil((endsAtEff - serverOffsetMs - now) / 1000))
       : MATCH_DURATION_S;
-  const lowTime = matchEndsAt > 0 && remainingS <= 60;
+  const lowTime = endsAtEff > 0 && (remainingS <= 60 || sad?.roundPhase === 'planted');
 
   const leader: 0 | 1 | -1 = scores[0] > scores[1] ? 0 : scores[1] > scores[0] ? 1 : -1;
 
@@ -95,9 +103,70 @@ export default function ScoreStrip() {
           </span>
         </div>
       </div>
+      {/* Sous-label selon le mode du salon */}
       <p className="mt-1.5 text-center font-hud text-[10px] font-semibold uppercase tracking-[0.22em] text-text-dim">
-        MATCH À MORT PAR ÉQUIPE — PREMIER À {SCORE_TARGET}
+        {modeType === 'dom'
+          ? 'DOMINATION — TENEZ LES ZONES'
+          : modeType === 'sad'
+            ? sad
+              ? `R&D — ROUND ${sad.round ?? 1} · ATTAQUE : ${TEAM_NAMES[sad.attackers ?? 0]}${sad.roundPhase === 'planted' ? ' · 💣 BOMBE POSÉE' : ''}`
+              : 'RECHERCHE & DESTRUCTION'
+            : `MATCH À MORT PAR ÉQUIPE — PREMIER À ${SCORE_TARGET}`}
       </p>
+
+      {/* DOM : pastilles de zones (lettre + couleur du propriétaire + jauge). */}
+      {modeType === 'dom' && modeState?.zones && (
+        <div className="mt-1.5 flex justify-center gap-1.5">
+          {modeState.zones.map((z, i) => {
+            const color =
+              z.owner === 0
+                ? 'var(--spectre)'
+                : z.owner === 1
+                  ? 'var(--ravage)'
+                  : z.capturing === 0
+                    ? 'var(--spectre)'
+                    : z.capturing === 1
+                      ? 'var(--ravage)'
+                      : 'var(--text-dim)';
+            return (
+              <div key={i} className="flex w-7 flex-col items-center">
+                <span
+                  className="chamfer-6 flex h-6 w-7 items-center justify-center border font-hud text-[12px] font-bold"
+                  style={{
+                    color,
+                    borderColor: color,
+                    background: z.owner !== -1 ? `color-mix(in srgb, ${color} 22%, transparent)` : 'rgba(6,9,12,0.55)',
+                  }}
+                >
+                  {ZONE_LETTERS[i]}
+                </span>
+                {/* Jauge de capture en cours */}
+                <span className="mt-0.5 h-[3px] w-full bg-[rgba(255,255,255,0.08)]">
+                  <span
+                    className="block h-full transition-[width] duration-150"
+                    style={{ width: `${Math.round(z.progress * 100)}%`, background: color }}
+                  />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* R&D : barre de progression pose/désamorçage (visible de tous). */}
+      {modeType === 'sad' && sad?.action && (
+        <div className="mx-auto mt-1.5 w-[220px]">
+          <p className="text-center font-hud text-[10px] font-semibold uppercase tracking-[0.22em] text-amber">
+            {sad.action.kind === 'plant' ? 'POSE DE LA BOMBE…' : 'DÉSAMORÇAGE…'}
+          </p>
+          <span className="mt-0.5 block h-[4px] w-full bg-[rgba(255,255,255,0.08)]">
+            <span
+              className="block h-full bg-amber transition-[width] duration-150"
+              style={{ width: `${Math.round(sad.action.progress * 100)}%` }}
+            />
+          </span>
+        </div>
+      )}
     </div>
   );
 }

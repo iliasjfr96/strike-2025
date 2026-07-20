@@ -28,7 +28,7 @@ import {
 import type { MapBox, TexKey } from '../../shared/map';
 import { TEAM_SPECTRE } from '../../shared/protocol';
 import type { CustomPropDef, PlacedObject } from '../../shared/protocol';
-import { MAP_OBJECT_DEFS, scaledSize } from '../../shared/mapObjects';
+import { MAP_OBJECT_DEFS, isZoneKind, scaledSize } from '../../shared/mapObjects';
 import { instantiateProp, loadPropTemplate } from './PropModels';
 
 const COLOR_SPECTRE = '#58A6E8';
@@ -192,12 +192,23 @@ export class MapBuilder {
   /** Décorations propres à KESTREL YARD (rails, tour, canal, camion…) —
    *  masquées en terrain vide ('flat'). */
   private readonly decorGroup = new THREE.Group();
+  /** Sol (dalle + marquages) — visible en flat, mis à l'échelle avec la map. */
+  private readonly groundGroup = new THREE.Group();
 
   constructor() {
     this.group.name = 'map';
     this.glowTex = makeGlowTexture();
     this.buildBoxes();
+    const beforeGround = new Set(this.group.children);
     this.buildGround();
+    this.groundGroup.name = 'ground';
+    for (const child of [...this.group.children]) {
+      if (!beforeGround.has(child)) {
+        this.group.remove(child);
+        this.groundGroup.add(child);
+      }
+    }
+    this.group.add(this.groundGroup);
     // Tout ce qui suit est décoratif et spécifique à la map de base : capturé
     // dans decorGroup pour pouvoir être masqué en mode « terrain vide ».
     const before = new Set(this.group.children);
@@ -225,6 +236,13 @@ export class MapBuilder {
   /** Terrain de départ : masque les décorations Kestrel en mode 'flat'. */
   setTerrain(terrain: 'kestrel' | 'flat'): void {
     this.decorGroup.visible = terrain !== 'flat';
+  }
+
+  /** Échelle XZ de la map (mapScale % du pack) : décor + sol suivent — les
+   *  boîtes de base arrivent déjà à l'échelle via setBaseBoxes. */
+  setMapScale(f: number): void {
+    this.decorGroup.scale.set(f, 1, f);
+    this.groundGroup.scale.set(f, 1, f);
   }
 
   /** Boxes de map : matériau PBR selon MapBox.tex (fusion par tex|color|uv). */
@@ -726,6 +744,25 @@ export class MapBuilder {
 
   private customGroup: THREE.Group | null = null;
   private readonly customMats = new Map<string, THREE.MeshStandardMaterial>();
+  /** Matériaux des zones de CAPTURE (ordre de placement — teintés par équipe
+   *  via setZoneStates) + tous les matériaux de zones (disposés au rebuild). */
+  private captureZoneMats: { fill: THREE.MeshStandardMaterial; edge: THREE.LineBasicMaterial }[] = [];
+  private zoneMatsAll: THREE.Material[] = [];
+
+  /** Teinte les zones de capture selon leur propriétaire (état DOM serveur). */
+  setZoneStates(zones: { owner: -1 | 0 | 1; capturing: -1 | 0 | 1 }[]): void {
+    const TEAM = ['#58a6e8', '#e0563f'];
+    for (let i = 0; i < this.captureZoneMats.length && i < zones.length; i++) {
+      const st = zones[i];
+      const { fill, edge } = this.captureZoneMats[i];
+      const color =
+        st.owner >= 0 ? TEAM[st.owner] : st.capturing >= 0 ? TEAM[st.capturing] : '#9aa4ac';
+      fill.color.set(color);
+      fill.emissive.set(color);
+      fill.opacity = st.capturing >= 0 ? 0.24 : 0.13;
+      edge.color.set(color);
+    }
+  }
   /** Matériaux des props FAÇONNÉS (clé texture|couleur — partagés). */
   private readonly shapeMats = new Map<string, THREE.MeshStandardMaterial>();
   /** Matériau grillage (texture canvas chain-link, transparent). */
@@ -950,15 +987,61 @@ export class MapBuilder {
       this.group.remove(this.customGroup);
       this.customGroup.traverse((o) => {
         // Les templates de props sont partagés (cache) — jamais disposés.
-        if (o instanceof THREE.Mesh && !o.userData.sharedGeom) o.geometry.dispose();
+        if ((o instanceof THREE.Mesh || o instanceof THREE.LineSegments) && !o.userData.sharedGeom) {
+          o.geometry.dispose();
+        }
       });
     }
+    for (const m of this.zoneMatsAll) m.dispose();
+    this.zoneMatsAll = [];
+    this.captureZoneMats = [];
     const g = new THREE.Group();
     g.name = 'custom-objects';
     for (const o of objects) {
       const size = scaledSize(o, props);
       if (!size) continue;
       const [sx, sy, sz] = size;
+
+      // ZONES de mode (capture / site de bombe) : volume translucide SANS
+      // collision — teinté par équipe en DOM (setZoneStates).
+      if (isZoneKind(o.kind)) {
+        const isCapture = o.kind === 'zone:capture';
+        const baseColor =
+          o.kind === 'zone:spawn0'
+            ? '#58a6e8' // spawn SPECTRE
+            : o.kind === 'zone:spawn1'
+              ? '#e0563f' // spawn RAVAGE
+              : isCapture
+                ? '#9aa4ac'
+                : '#F59E1F'; // site de bombe
+        const fill = new THREE.MeshStandardMaterial({
+          color: baseColor,
+          emissive: baseColor,
+          emissiveIntensity: 0.4,
+          transparent: true,
+          opacity: 0.13,
+          depthWrite: false,
+        });
+        const edge = new THREE.LineBasicMaterial({ color: baseColor, transparent: true, opacity: 0.6 });
+        this.zoneMatsAll.push(fill, edge);
+        if (isCapture) this.captureZoneMats.push({ fill, edge });
+
+        const holder = new THREE.Group();
+        holder.position.set(o.x, o.y, o.z);
+        holder.rotation.y = (o.rot * Math.PI) / 2;
+        holder.userData.objId = o.id;
+        const volGeom = new THREE.BoxGeometry(sx, sy, sz);
+        const vol = new THREE.Mesh(volGeom, fill);
+        vol.position.y = sy / 2;
+        vol.userData.objId = o.id;
+        holder.add(vol);
+        const lines = new THREE.LineSegments(new THREE.EdgesGeometry(volGeom), edge);
+        lines.position.y = sy / 2;
+        lines.userData.objId = o.id;
+        holder.add(lines);
+        g.add(holder);
+        continue;
+      }
 
       if (o.kind.startsWith('prop:')) {
         const def = props.find((p) => p.id === o.kind.slice(5));

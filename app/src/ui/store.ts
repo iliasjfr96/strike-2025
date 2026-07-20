@@ -219,6 +219,12 @@ export interface GameUIState {
 
   // ---- Données dynamiques ----
   minimap: MinimapData;
+  /** Type de mode du salon courant ('tdm' par défaut). */
+  modeType: import('../shared/protocol').GameModeType;
+  /** Dernier état de mode reçu (zones DOM / round R&D), null hors dom/sad. */
+  modeState: import('../shared/protocol').ModeStateMsg | null;
+  /** Invite d'action E (centre-bas du HUD), null = masquée. */
+  usePrompt: string | null;
   killfeed: KillfeedEntry[];       // max 6, purge > 5 s côté composant
   hitmarkers: HitmarkerEvent[];    // transitoires (~150 ms)
   damageIndicators: DamageIndicator[];
@@ -255,6 +261,11 @@ export interface GameUIState {
   engineSetServerOffset(offsetMs: number): void;
   engineSetPing(pingMs: number): void;
   engineSetMinimap(data: MinimapData): void;
+  /** État du mode de jeu (zones DOM / round R&D) + type courant du salon. */
+  engineSetModeState(state: import('../shared/protocol').ModeStateMsg | null): void;
+  engineSetModeType(type: import('../shared/protocol').GameModeType): void;
+  /** Invite d'action contextuelle (E) affichée au centre-bas, null = masquée. */
+  engineSetUsePrompt(text: string | null): void;
   engineAddKillfeed(entry: Omit<KillfeedEntry, 'id' | 'at'>): void;
   engineAddHitmarker(kind: 'hit' | 'kill', head: boolean): void;
   engineAddDamageIndicator(relYaw: number): void;
@@ -318,6 +329,9 @@ export const useGameUI = create<GameUIState>((set) => ({
   serverOffsetMs: 0,
 
   minimap: { allies: [], enemies: [], uavUntil: 0 },
+  modeType: 'tdm',
+  modeState: null,
+  usePrompt: null,
   killfeed: [],
   hitmarkers: [],
   damageIndicators: [],
@@ -379,6 +393,10 @@ export const useGameUI = create<GameUIState>((set) => ({
   engineSetServerOffset: (offsetMs) => set({ serverOffsetMs: offsetMs }),
   engineSetPing: (pingMs) => set({ pingMs }),
   engineSetMinimap: (data) => set({ minimap: data }),
+  engineSetModeState: (modeState) => set({ modeState }),
+  engineSetModeType: (modeType) => set({ modeType }),
+  engineSetUsePrompt: (usePrompt) =>
+    set((state) => (state.usePrompt === usePrompt ? state : { ...state, usePrompt })),
   engineAddKillfeed: (entry) =>
     set((state) => ({
       killfeed: [...state.killfeed, { ...entry, id: ++killfeedId, at: Date.now() }].slice(-6),
@@ -437,6 +455,8 @@ export const useGameUI = create<GameUIState>((set) => ({
       scores: [0, 0],
       matchEndsAt: 0,
       minimap: { allies: [], enemies: [], uavUntil: 0 },
+      modeState: null,
+      usePrompt: null,
       killfeed: [],
       hitmarkers: [],
       damageIndicators: [],

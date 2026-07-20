@@ -240,7 +240,8 @@ function applyKill(
   }
   victim.damageLog = [];
 
-  game.scores[killer.team]++;
+  // Score d'équipe par kill : TDM uniquement (DOM = zones, R&D = rounds).
+  if (game.mode.killsScore) game.scores[killer.team]++;
   game.broadcast({
     t: 'ev',
     kind: 'kill',
@@ -252,7 +253,9 @@ function applyKill(
     scores: [...game.scores] as TeamScores,
   });
 
-  if (game.scores[killer.team] >= game.scoreTarget) {
+  if (game.mode.killsScore && game.scores[killer.team] >= game.mode.scoreTarget()) {
     game.endMatch();
   }
+  // R&D : détection d'élimination d'équipe (fin de round).
+  game.mode.onDeath(victim, now);
 }

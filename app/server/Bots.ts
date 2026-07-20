@@ -57,11 +57,11 @@ export interface BotBrain {
 // NB : les cerveaux vivent dans game.botBrains (un jeu = un salon — les ids
 // de joueurs ne sont uniques QUE par salon).
 
-function makeBrain(x: number, z: number): BotBrain {
+function makeBrain(game: Game, x: number, z: number): BotBrain {
   const lane = LANES[Math.floor(Math.random() * LANES.length)];
   return {
     lane,
-    wpIndex: nearestWpIndex(lane, x, z),
+    wpIndex: nearestWpIndex(game, lane, x, z),
     wpDir: Math.random() < 0.5 ? 1 : -1,
     targetId: -1,
     burstLeft: 0,
@@ -78,12 +78,19 @@ function makeBrain(x: number, z: number): BotBrain {
   };
 }
 
-function nearestWpIndex(lane: Lane, x: number, z: number): number {
+/** Waypoint [x,z] à l'échelle de la map du salon (mapScale %). */
+function wpAt(game: Game, lane: Lane, i: number): [number, number] {
+  const w = WAYPOINTS[lane][i];
+  return [w[0] * game.mapScaleF, w[1] * game.mapScaleF];
+}
+
+function nearestWpIndex(game: Game, lane: Lane, x: number, z: number): number {
   const wps = WAYPOINTS[lane];
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < wps.length; i++) {
-    const d = Math.hypot(wps[i][0] - x, wps[i][1] - z);
+    const w = wpAt(game, lane, i);
+    const d = Math.hypot(w[0] - x, w[1] - z);
     if (d < bestD) {
       bestD = d;
       best = i;
@@ -119,7 +126,7 @@ export function addBot(game: Game, team: TeamId): ServerPlayer {
   const classId: ClassId = CLASS_IDS[Math.floor(Math.random() * CLASS_IDS.length)];
   const p = makePlayer(id, botName(game), team, classId, true, game.weapons, game.loadouts[classId]);
   game.players.set(id, p);
-  game.botBrains.set(id, makeBrain(p.body.pos.x, p.body.pos.z));
+  game.botBrains.set(id, makeBrain(game, p.body.pos.x, p.body.pos.z));
   game.broadcast({ t: 'ev', kind: 'join', player: playerInfo(p) });
   respawnPlayer(game, p);
   return p;
@@ -138,7 +145,7 @@ export function updateBots(game: Game, now: number): void {
     if (!p.bot) continue;
     let brain = game.botBrains.get(p.id);
     if (!brain) {
-      brain = makeBrain(p.body.pos.x, p.body.pos.z);
+      brain = makeBrain(game, p.body.pos.x, p.body.pos.z);
       game.botBrains.set(p.id, brain);
     }
     if (!p.alive) continue;
@@ -224,8 +231,7 @@ function stepBot(game: Game, p: ServerPlayer, brain: BotBrain, now: number): voi
     // ---------------- PATROL ----------------
     brain.targetId = -1;
     brain.burstLeft = 0;
-    const wps = WAYPOINTS[brain.lane];
-    const wp = wps[brain.wpIndex];
+    const wp = wpAt(game, brain.lane, brain.wpIndex);
     const dx = wp[0] - p.body.pos.x;
     const dz = wp[1] - p.body.pos.z;
     if (Math.hypot(dx, dz) < 1.8) {
@@ -239,7 +245,7 @@ function stepBot(game: Game, p: ServerPlayer, brain: BotBrain, now: number): voi
       if (Math.random() < 0.3) {
         const others = LANES.filter((l) => l !== brain.lane);
         brain.lane = others[Math.floor(Math.random() * others.length)];
-        brain.wpIndex = nearestWpIndex(brain.lane, p.body.pos.x, p.body.pos.z);
+        brain.wpIndex = nearestWpIndex(game, brain.lane, p.body.pos.x, p.body.pos.z);
         brain.wpDir = Math.random() < 0.5 ? 1 : -1;
       }
     }
@@ -257,7 +263,7 @@ function stepBot(game: Game, p: ServerPlayer, brain: BotBrain, now: number): voi
       brain.stuckX = p.body.pos.x;
       brain.stuckZ = p.body.pos.z;
     }
-    const wp2 = WAYPOINTS[brain.lane][brain.wpIndex];
+    const wp2 = wpAt(game, brain.lane, brain.wpIndex);
     p.yaw = Math.atan2(-(wp2[0] - p.body.pos.x), -(wp2[1] - p.body.pos.z));
     p.pitch = 0;
     keys = KEY_FORWARD | KEY_SPRINT;
@@ -281,6 +287,7 @@ function stepBot(game: Game, p: ServerPlayer, brain: BotBrain, now: number): voi
     game.colliders,
     TICK_DT,
     game.weapons[currentWeapon(p).id].mobility,
+    game.mapScaleF,
   );
 }
 

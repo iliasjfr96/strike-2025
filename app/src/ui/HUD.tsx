@@ -29,6 +29,8 @@ const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as [number, number, number, number];
 export default function HUD() {
   const phase = useGameUI((s) => s.phase);
   const hp = useGameUI((s) => s.hp);
+  const usePrompt = useGameUI((s) => s.usePrompt);
+  const modeType = useGameUI((s) => s.modeType);
   const damageIndicators = useGameUI((s) => s.damageIndicators);
   const quality = useGameUI((s) => s.settings.quality);
 
@@ -153,6 +155,24 @@ export default function HUD() {
           <HealthBar />
           {/* Module 9 — Munitions & arme (bas-droite) */}
           <AmmoBlock />
+
+          {/* Module 12 — Invite d'action E (R&D : poser / désamorcer) */}
+          <AnimatePresence>
+            {usePrompt && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14 }}
+                className="chamfer-8 panel-surface absolute inset-x-0 bottom-[132px] z-30 mx-auto flex h-9 w-[340px] items-center justify-center"
+              >
+                <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-amber" />
+                <span className="font-hud text-[12px] font-semibold uppercase tracking-[0.18em] text-amber">
+                  {usePrompt}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
 
@@ -188,7 +208,11 @@ export default function HUD() {
           >
             <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-amber" />
             <span className="font-display text-[20px] font-semibold uppercase tracking-[0.08em] text-text-hi">
-              MATCH À MORT PAR ÉQUIPE — ÉLIMINEZ L'ENNEMI
+              {modeType === 'dom'
+                ? 'DOMINATION — CAPTUREZ ET TENEZ LES ZONES'
+                : modeType === 'sad'
+                  ? 'RECHERCHE & DESTRUCTION — POSEZ OU DÉFENDEZ'
+                  : "MATCH À MORT PAR ÉQUIPE — ÉLIMINEZ L'ENNEMI"}
             </span>
           </motion.div>
         )}

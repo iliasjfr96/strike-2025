@@ -44,6 +44,8 @@ export interface ServerPlayer {
 
   hp: number;
   alive: boolean;
+  /** Dernier bitmask de touches intégré (KEY_USE pour les actions de mode). */
+  lastKeys: number;
   /** Timestamp (ms) du respawn prévu, 0 si vivant. */
   respawnAt: number;
   /** Fin de protection de spawn (ms), 0 si inactive. */
@@ -106,6 +108,7 @@ export function makePlayer(
     pitch: 0,
     hp: HP_MAX,
     alive: false,
+    lastKeys: 0,
     respawnAt: 0,
     protectUntil: 0,
     lastDamageAt: 0,

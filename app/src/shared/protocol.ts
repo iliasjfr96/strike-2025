@@ -271,6 +271,79 @@ export interface WeaponModelMod {
   normalMap?: string;
 }
 
+// ----------------------------------------------------------------------------
+// Modes de jeu (définis par le pack — les créateurs de maps décident)
+// ----------------------------------------------------------------------------
+
+/** Type de mode : match à mort / domination (capture de zones) /
+ *  recherche & destruction (bombe, rounds sans respawn). */
+export type GameModeType = 'tdm' | 'dom' | 'sad';
+
+/** Configuration du mode de jeu d'un pack. Tous les réglages sont BORNÉS
+ *  côté serveur (sanitizeGameMode). Les zones jouables (points de capture,
+ *  sites de bombe) sont des PlacedObject de kind 'zone:capture' /
+ *  'zone:bombsite' placés dans l'éditeur. Absent = TDM classique. */
+export interface GameModeConfig {
+  type: GameModeType;
+  /** tdm : kills cibles · dom : points cibles. */
+  scoreTarget?: number;
+  /** tdm/dom : durée du match (s). */
+  matchDurationS?: number;
+  /** dom : secondes de présence pour retourner une zone. */
+  captureTimeS?: number;
+  /** dom : points gagnés par seconde et par zone tenue. */
+  pointsPerSecond?: number;
+  /** sad : durée d'un round (s) — expirée sans pose = victoire défense. */
+  roundTimeS?: number;
+  /** sad : temps de POSE de la bombe (s, E maintenu dans un site). */
+  plantTimeS?: number;
+  /** sad : temps de DÉSAMORÇAGE (s, E maintenu près de la bombe). */
+  defuseTimeS?: number;
+  /** sad : compte à rebours de la bombe posée (s). */
+  bombTimeS?: number;
+  /** sad : rounds gagnés pour remporter le match. */
+  roundsToWin?: number;
+}
+
+/** État d'une zone de capture (domination). */
+export interface ZoneState {
+  /** Propriétaire : -1 = neutre, sinon équipe. */
+  owner: -1 | TeamId;
+  /** Progression de capture 0..1 (au profit de `capturing`). */
+  progress: number;
+  /** Équipe en train de capturer (-1 = personne / contesté). */
+  capturing: -1 | TeamId;
+}
+
+/** Phase d'un round R&D. */
+export type SadRoundPhase = 'live' | 'planted' | 'over';
+
+/** État périodique du mode (≈4 Hz + à chaque événement). */
+export interface ModeStateMsg {
+  t: 'mode';
+  // ---- domination ----
+  zones?: ZoneState[];
+  // ---- recherche & destruction ----
+  round?: number;
+  attackers?: TeamId;
+  roundPhase?: SadRoundPhase;
+  /** Timestamp serveur (ms) de l'échéance courante (fin de round OU bombe). */
+  roundEndsAt?: number;
+  /** Index du site où la bombe est posée (-1 sinon). */
+  bombSite?: number;
+  /** Action E en cours (pose/désamorçage) — pour les barres de progression. */
+  action?: { playerId: number; kind: 'plant' | 'defuse'; progress: number } | null;
+}
+
+/** Événement de mode : annonce FR prête à afficher (bandeau HUD). */
+export interface EvMode {
+  kind: 'mode';
+  msg: string;
+  /** Sous-type pour le style/son côté client. */
+  sub: 'plant' | 'defuse' | 'boom' | 'roundWin' | 'zone' | 'info';
+  team?: TeamId;
+}
+
 /** Mods d'armes d'un salon : par arme, stats et/ou modèle custom. */
 export type WeaponModsConfig = Partial<
   Record<WeaponId, { stats?: WeaponStatsMod; model?: WeaponModelMod }>
@@ -324,6 +397,10 @@ export interface MapObjectsMsg {
   props?: CustomPropDef[];
   /** Terrain de départ ('kestrel' par défaut). */
   baseTerrain?: BaseTerrain;
+  /** Mode de jeu du pack (absent = TDM classique). */
+  gameMode?: GameModeConfig;
+  /** Taille de la map en % (50..200, footprint XZ). Absent = 100. */
+  mapScale?: number;
 }
 
 /** Métadonnées de map envoyées dans welcome (le client possède déjà les
@@ -485,6 +562,10 @@ export interface WelcomeMsg {
   props?: CustomPropDef[];
   /** Terrain de départ ('kestrel' par défaut). */
   baseTerrain?: BaseTerrain;
+  /** Mode de jeu du salon (absent = TDM classique). */
+  gameMode?: GameModeConfig;
+  /** Taille de la map en % (50..200). Absent = 100. */
+  mapScale?: number;
 }
 
 /** Snapshot complet à SNAP_RATE Hz. */
@@ -595,7 +676,8 @@ export type GameEvent =
   | EvPhase
   | EvJoin
   | EvLeave
-  | EvReject;
+  | EvReject
+  | EvMode;
 
 /** Enveloppe événement : { t: 'ev', ...GameEvent }. */
 export type EvMsg = { t: 'ev' } & GameEvent;
@@ -607,7 +689,7 @@ export interface PongMsg {
   s: number;
 }
 
-export type ServerMsg = WelcomeMsg | SnapMsg | EvMsg | PongMsg | MapObjectsMsg;
+export type ServerMsg = WelcomeMsg | SnapMsg | EvMsg | PongMsg | MapObjectsMsg | ModeStateMsg;
 
 // ----------------------------------------------------------------------------
 // Helpers d'encodage / décodage

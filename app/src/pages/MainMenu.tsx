@@ -201,7 +201,29 @@ export default function MainMenu() {
     }
   };
 
-  const onlineCount = players.length > 0 ? players.length : 12847;
+  // VRAI nombre de joueurs connectés : somme des humains de tous les salons
+  // (interrogé au montage puis toutes les 15 s).
+  const [onlineCount, setOnlineCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const refresh = (): void => {
+      void fetch('/rooms', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((j: { rooms?: { humans?: number }[] }) => {
+          if (!alive || !Array.isArray(j.rooms)) return;
+          setOnlineCount(j.rooms.reduce((n, r) => n + (r.humans ?? 0), 0));
+        })
+        .catch(() => {
+          /* serveur injoignable : le compteur reste tel quel */
+        });
+    };
+    refresh();
+    const t = window.setInterval(refresh, 15000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
 
   return (
     <section

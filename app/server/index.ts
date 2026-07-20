@@ -278,7 +278,7 @@ const server = createServer((req, res) => {
         if (req.method === 'GET') {
           const s = attachment.rooms.main.game.mapState;
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ objects: s.objects, baseEdits: s.baseEdits, weaponMods: s.weaponMods ?? {}, loadouts: s.loadouts ?? {}, props: s.props ?? [], baseTerrain: s.baseTerrain ?? 'kestrel' }));
+          res.end(JSON.stringify({ objects: s.objects, baseEdits: s.baseEdits, weaponMods: s.weaponMods ?? {}, loadouts: s.loadouts ?? {}, props: s.props ?? [], baseTerrain: s.baseTerrain ?? 'kestrel', gameMode: s.gameMode ?? null, mapScale: s.mapScale ?? null }));
           return;
         }
         if (req.method === 'POST') {
@@ -288,7 +288,7 @@ const server = createServer((req, res) => {
           const parsed = await readJson(req, res);
           if (parsed === undefined) return;
           const p = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>;
-          const state = saveMainMapState(p.objects, p.baseEdits, p.weaponMods, p.loadouts, p.props, p.baseTerrain);
+          const state = saveMainMapState(p.objects, p.baseEdits, p.weaponMods, p.loadouts, p.props, p.baseTerrain, p.gameMode, p.mapScale);
           // Application au salon principal + diffusion live à ses joueurs.
           attachment.rooms.main.game.applyMap(state);
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
@@ -317,7 +317,7 @@ const server = createServer((req, res) => {
           const parsed = await readJson(req, res);
           if (parsed === undefined) return;
           const p = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>;
-          const published = publishMap(p.name, p.author, p.objects, p.baseEdits, p.weaponMods, p.loadouts, p.props, p.baseTerrain);
+          const published = publishMap(p.name, p.author, p.objects, p.baseEdits, p.weaponMods, p.loadouts, p.props, p.baseTerrain, p.gameMode, p.mapScale);
           if (published === null) {
             res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ ok: false, error: 'map vide ou bibliothèque pleine' }));

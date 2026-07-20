@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import path from 'node:path';
 import { MAP_VERSION } from '../src/shared/map.js';
 import type { MapState } from '../src/shared/mapObjects.js';
-import { sanitizeBaseEdits, sanitizePlacedObjects, sanitizeProps } from '../src/shared/mapObjects.js';
+import { sanitizeBaseEdits, sanitizeGameMode, sanitizeMapScale, sanitizePlacedObjects, sanitizeProps } from '../src/shared/mapObjects.js';
 import { sanitizeLoadouts, sanitizeWeaponMods } from '../src/shared/weaponMods.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -26,7 +26,8 @@ export function loadMainMapState(): MapState {
       const props = sanitizeProps(data.props);
       const objects = sanitizePlacedObjects('objects' in data ? data.objects : raw, props);
       const baseTerrain = data.baseTerrain === 'flat' ? 'flat' as const : 'kestrel' as const;
-      const weaponMods = sanitizeWeaponMods(data.weaponMods);
+      // Salon principal = pack de l'ADMIN : les armes de base sont modifiables.
+      const weaponMods = sanitizeWeaponMods(data.weaponMods, true);
       const loadouts = sanitizeLoadouts(data.loadouts);
       let baseEdits = data.mapVersion === MAP_VERSION ? sanitizeBaseEdits(data.baseEdits) : [];
       if (baseEdits.length === 0 && Array.isArray(data.baseEdits) && data.baseEdits.length > 0 && data.mapVersion !== MAP_VERSION) {
@@ -38,7 +39,7 @@ export function loadMainMapState(): MapState {
       console.log(
         `[map] édition du salon principal chargée : ${objects.length} objet(s), ${baseEdits.length} édition(s) de base`,
       );
-      return { objects, baseEdits, weaponMods, loadouts, props, baseTerrain };
+      return { objects, baseEdits, weaponMods, loadouts, props, baseTerrain, gameMode: sanitizeGameMode(data.gameMode), mapScale: sanitizeMapScale(data.mapScale) };
     }
   } catch (err) {
     console.error('[map] échec de chargement de l’édition de map :', err);
@@ -47,15 +48,17 @@ export function loadMainMapState(): MapState {
 }
 
 /** Sanitise et persiste (écriture atomique) l'état du salon principal. */
-export function saveMainMapState(rawObjects: unknown, rawBaseEdits: unknown, rawWeaponMods?: unknown, rawLoadouts?: unknown, rawProps?: unknown, rawTerrain?: unknown): MapState {
+export function saveMainMapState(rawObjects: unknown, rawBaseEdits: unknown, rawWeaponMods?: unknown, rawLoadouts?: unknown, rawProps?: unknown, rawTerrain?: unknown, rawGameMode?: unknown, rawMapScale?: unknown): MapState {
   const props = sanitizeProps(rawProps);
   const state: MapState = {
     objects: sanitizePlacedObjects(rawObjects, props),
     baseEdits: sanitizeBaseEdits(rawBaseEdits),
-    weaponMods: sanitizeWeaponMods(rawWeaponMods),
+    weaponMods: sanitizeWeaponMods(rawWeaponMods, true), // route protégée par le code admin
     loadouts: sanitizeLoadouts(rawLoadouts),
     props,
     baseTerrain: rawTerrain === 'flat' ? 'flat' : 'kestrel',
+    gameMode: sanitizeGameMode(rawGameMode),
+    mapScale: sanitizeMapScale(rawMapScale),
   };
   try {
     mkdirSync(DATA_DIR, { recursive: true });
@@ -63,7 +66,7 @@ export function saveMainMapState(rawObjects: unknown, rawBaseEdits: unknown, raw
     writeFileSync(
       tmp,
       JSON.stringify(
-        { version: 2, mapVersion: MAP_VERSION, objects: state.objects, baseEdits: state.baseEdits, weaponMods: state.weaponMods, loadouts: state.loadouts, props: state.props, baseTerrain: state.baseTerrain },
+        { version: 2, mapVersion: MAP_VERSION, objects: state.objects, baseEdits: state.baseEdits, weaponMods: state.weaponMods, loadouts: state.loadouts, props: state.props, baseTerrain: state.baseTerrain, gameMode: state.gameMode, mapScale: state.mapScale },
         null,
         1,
       ),

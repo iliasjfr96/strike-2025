@@ -22,6 +22,7 @@ import type {
   ClassId,
   ClassLoadouts,
   CustomPropDef,
+  GameModeConfig,
   MapBaseEdit,
   PlacedObject,
   WeaponId,
@@ -44,6 +45,9 @@ import {
 } from '../../shared/mapObjects';
 import type { Renderer } from '../render/Renderer';
 import type { MapBuilder } from '../render/MapBuilder';
+
+/** Clé localStorage du brouillon d'éditeur (sauvegarde sans droits). */
+const DRAFT_KEY = 'strike-editor-draft';
 
 const GRID = 0.25;
 const FLY_SPEED = 11;
@@ -79,6 +83,8 @@ export interface EditorUIState {
   lastSaveOk: boolean | null;
   /** Message d'échec de sauvegarde (ex. code admin requis), sinon null. */
   lastSaveError: string | null;
+  /** Message de succès (brouillon local / appliqué au salon principal). */
+  lastSaveMsg: string | null;
   /** Échelle courante du fantôme [x, y, z]. */
   scale: [number, number, number];
   /** 'custom' | 'base' | null — objet en cours de déplacement (touche E). */
@@ -104,6 +110,10 @@ export class MapEditorController {
   props: CustomPropDef[] = [];
   /** Terrain de départ du pack. */
   baseTerrain: BaseTerrain = 'kestrel';
+  /** Mode de jeu du pack (undefined = TDM classique). */
+  gameMode: GameModeConfig | undefined;
+  /** Taille de la map en % (100 = origine). */
+  mapScale = 100;
   private nextId = 1;
   private kind = 'crate';
   private rot: 0 | 1 | 2 | 3 = 0;
@@ -114,6 +124,7 @@ export class MapEditorController {
   private saving = false;
   private lastSaveOk: boolean | null = null;
   private lastSaveError: string | null = null;
+  private lastSaveMsg: string | null = null;
   private undoStack: { objects: PlacedObject[]; baseEdits: MapBaseEdit[] }[] = [];
 
   // Caméra libre
@@ -275,15 +286,41 @@ export class MapEditorController {
     document.addEventListener('wheel', this.onWheel, { passive: false });
     this.canvas.addEventListener('click', this.onCanvasClick);
     document.addEventListener('pointerlockchange', this.onLockChange);
+    // Brouillon local prioritaire (le travail du joueur n'est jamais perdu) ;
+    // sinon, pack courant du salon principal.
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw) as { objects?: PlacedObject[]; baseEdits?: MapBaseEdit[]; weaponMods?: WeaponModsConfig; loadouts?: ClassLoadouts; props?: CustomPropDef[]; baseTerrain?: BaseTerrain; gameMode?: GameModeConfig };
+        this.objects = Array.isArray(d.objects) ? d.objects : [];
+        this.baseEdits = Array.isArray(d.baseEdits) ? d.baseEdits : [];
+        this.weaponMods = typeof d.weaponMods === 'object' && d.weaponMods !== null ? d.weaponMods : {};
+        this.loadouts = typeof d.loadouts === 'object' && d.loadouts !== null ? d.loadouts : {};
+        this.props = Array.isArray(d.props) ? d.props : [];
+        this.baseTerrain = d.baseTerrain === 'flat' ? 'flat' : 'kestrel';
+        this.gameMode = d.gameMode ?? undefined;
+        this.mapScale = typeof (d as { mapScale?: number }).mapScale === 'number' ? (d as { mapScale?: number }).mapScale! : 100;
+        this.nextId = this.objects.reduce((m, o) => Math.max(m, o.id), 0) + 1;
+        this.lastSaveMsg = 'BROUILLON LOCAL REPRIS (TOUT RESTAURER pour repartir de zéro)';
+        this.lastSaveOk = true;
+        this.applyLocal();
+        this.emit();
+        return;
+      }
+    } catch {
+      /* brouillon illisible : on repart du pack serveur */
+    }
     void fetch('/mapedit/objects', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((data: { objects?: PlacedObject[]; baseEdits?: MapBaseEdit[]; weaponMods?: WeaponModsConfig; loadouts?: ClassLoadouts; props?: CustomPropDef[]; baseTerrain?: BaseTerrain }) => {
+      .then((data: { objects?: PlacedObject[]; baseEdits?: MapBaseEdit[]; weaponMods?: WeaponModsConfig; loadouts?: ClassLoadouts; props?: CustomPropDef[]; baseTerrain?: BaseTerrain; gameMode?: GameModeConfig | null; mapScale?: number | null }) => {
         this.objects = Array.isArray(data.objects) ? data.objects : [];
         this.baseEdits = Array.isArray(data.baseEdits) ? data.baseEdits : [];
         this.weaponMods = typeof data.weaponMods === 'object' && data.weaponMods !== null ? data.weaponMods : {};
         this.loadouts = typeof data.loadouts === 'object' && data.loadouts !== null ? data.loadouts : {};
         this.props = Array.isArray(data.props) ? data.props : [];
         this.baseTerrain = data.baseTerrain === 'flat' ? 'flat' : 'kestrel';
+        this.gameMode = data.gameMode ?? undefined;
+        this.mapScale = typeof data.mapScale === 'number' ? data.mapScale : 100;
         this.nextId = this.objects.reduce((m, o) => Math.max(m, o.id), 0) + 1;
         this.applyLocal();
       })
@@ -294,6 +331,8 @@ export class MapEditorController {
         this.loadouts = {};
         this.props = [];
         this.baseTerrain = 'kestrel';
+        this.gameMode = undefined;
+        this.mapScale = 100;
         this.applyLocal();
       });
     this.emit();
@@ -324,7 +363,8 @@ export class MapEditorController {
   /** Applique l'état local : visuels (base éditée + objets) + proxies picking. */
   private applyLocal(): void {
     this.mapBuilder.setTerrain(this.baseTerrain);
-    this.mapBuilder.setBaseBoxes(effectiveBaseBoxes({ baseEdits: this.baseEdits, baseTerrain: this.baseTerrain }));
+    this.mapBuilder.setMapScale(this.mapScale / 100);
+    this.mapBuilder.setBaseBoxes(effectiveBaseBoxes({ baseEdits: this.baseEdits, baseTerrain: this.baseTerrain, mapScale: this.mapScale }));
     this.mapBuilder.setCustomObjects(this.objects, this.props);
     this.rebuildPickGroup();
     this.emit();
@@ -549,6 +589,7 @@ export class MapEditorController {
       saving: this.saving,
       lastSaveOk: this.lastSaveOk,
       lastSaveError: this.lastSaveError,
+      lastSaveMsg: this.lastSaveMsg,
       scale:
         this.carried?.type === 'base'
           ? [this.carried.dims[0], this.carried.dims[1], this.carried.dims[2]]
@@ -742,34 +783,77 @@ export class MapEditorController {
   /** Efface les objets PLACÉS et restaure toutes les boîtes de base. */
   clearAll(): void {
     if (this.carried) this.cancelCarry();
-    if (this.objects.length === 0 && this.baseEdits.length === 0) return;
+    // Le brouillon local est abandonné aussi (repartir de zéro).
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignoré */
+    }
     this.pushUndo();
     this.objects = [];
     this.baseEdits = [];
+    this.weaponMods = {};
+    this.loadouts = {};
+    this.props = [];
+    this.baseTerrain = 'kestrel';
+    this.gameMode = undefined;
+    this.mapScale = 100;
     this.dirty = true;
+    this.lastSaveMsg = null;
     this.applyLocal();
   }
 
-  /** Sauvegarde serveur : persiste, applique les collisions, rediffuse. */
-  async save(): Promise<void> {
-    if (this.saving) return;
+  /** Pack complet courant (brouillon / application / publication). */
+  private packJson(): string {
+    return JSON.stringify({
+      objects: this.objects,
+      baseEdits: this.baseEdits,
+      weaponMods: this.weaponMods,
+      loadouts: this.loadouts,
+      props: this.props,
+      baseTerrain: this.baseTerrain,
+      gameMode: this.gameMode,
+      mapScale: this.mapScale === 100 ? undefined : this.mapScale,
+    });
+  }
+
+  /** Sauvegarde LOCALE du brouillon (aucun droit requis — rien n'est perdu).
+   *  Le partage passe par PUBLIER ; le salon principal par applyToMain(). */
+  save(): void {
     if (this.carried) this.cancelCarry(); // un objet porté n'est pas perdu
+    try {
+      localStorage.setItem(DRAFT_KEY, this.packJson());
+      this.lastSaveOk = true;
+      this.lastSaveError = null;
+      this.lastSaveMsg = 'BROUILLON SAUVEGARDÉ (LOCAL) — PUBLIEZ POUR PARTAGER';
+      this.dirty = false;
+    } catch {
+      this.lastSaveOk = false;
+      this.lastSaveError = 'ÉCHEC DE SAUVEGARDE LOCALE (stockage navigateur plein ?)';
+    }
+    this.emit();
+  }
+
+  /** ADMIN : applique le pack au SALON PRINCIPAL (map jouée par défaut).
+   *  Requiert le code admin (écran ADMIN — mémorisé en localStorage). */
+  async applyToMain(): Promise<void> {
+    if (this.saving) return;
+    if (this.carried) this.cancelCarry();
     this.saving = true;
     this.emit();
     try {
-      // La sauvegarde du salon principal est réservée à l'admin : le code
-      // saisi dans l'écran ADMIN (localStorage) est joint à la requête.
       const adminToken = localStorage.getItem('strike-admin-token') ?? '';
       const res = await fetch('/mapedit/objects', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-admin-token': adminToken },
-        body: JSON.stringify({ objects: this.objects, baseEdits: this.baseEdits, weaponMods: this.weaponMods, loadouts: this.loadouts, props: this.props, baseTerrain: this.baseTerrain }),
+        body: this.packJson(),
       });
       this.lastSaveOk = res.ok;
+      this.lastSaveMsg = res.ok ? 'APPLIQUÉ AU SALON PRINCIPAL — ACTIF POUR TOUS' : null;
       this.lastSaveError = res.ok
         ? null
         : res.status === 401
-          ? 'CODE ADMIN REQUIS — entrez-le dans le menu ADMIN (votre map reste publiable dans la communauté)'
+          ? 'CODE ADMIN REQUIS — entrez-le dans le menu ADMIN'
           : null;
       if (res.ok) this.dirty = false;
     } catch {
@@ -814,6 +898,32 @@ export class MapEditorController {
     else delete this.weaponMods[id];
     this.dirty = true;
     if (this.previewId === id) void this.showPreview(id);
+    this.emit();
+  }
+
+  /** Taille de la map en % (50..200) — footprint XZ. */
+  setMapScale(pct: number): void {
+    const v = Math.round(Math.min(200, Math.max(50, pct)));
+    if (v === this.mapScale) return;
+    this.mapScale = v;
+    this.dirty = true;
+    this.applyLocal();
+  }
+
+  /** Change le MODE DE JEU du pack ('tdm' = retour au mode classique). */
+  setGameMode(type: 'tdm' | 'dom' | 'sad'): void {
+    if (type === 'tdm') this.gameMode = undefined;
+    else this.gameMode = { ...(this.gameMode ?? {}), type };
+    this.dirty = true;
+    this.emit();
+  }
+
+  /** Modifie un réglage du mode (undefined = valeur par défaut). */
+  setModeSetting(key: keyof Omit<GameModeConfig, 'type'>, v: number | undefined): void {
+    if (!this.gameMode) return;
+    if (v === undefined || !Number.isFinite(v)) delete this.gameMode[key];
+    else this.gameMode[key] = v;
+    this.dirty = true;
     this.emit();
   }
 
@@ -971,6 +1081,7 @@ export class MapEditorController {
           loadouts: this.loadouts,
           props: this.props,
           baseTerrain: this.baseTerrain,
+          gameMode: this.gameMode,
         }),
       });
       if (!res.ok) return null;

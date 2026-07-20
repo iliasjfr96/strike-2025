@@ -122,6 +122,7 @@ export const KEY_JUMP = 1 << 4;    // Espace
 export const KEY_CROUCH = 1 << 5;  // Ctrl / C
 export const KEY_SPRINT = 1 << 6;  // Shift
 export const KEY_ADS = 1 << 7;     // Clic droit
+export const KEY_USE = 1 << 8;     // E — action contextuelle (poser/désamorcer)
 
 export interface PlayerInput {
   yaw: number;   // radians (déjà clampé côté client)
@@ -227,6 +228,7 @@ export function stepBody(
   colliders: AABB[],
   dt: number,
   speedMult = 1,
+  worldScale = 1,
 ): void {
   if (!(dt > 0)) return;
   if (dt > DT_MAX) dt = DT_MAX;
@@ -325,11 +327,12 @@ export function stepBody(
   }
 
   // ---- 7. Enveloppe du monde (filet de sécurité, jamais atteinte en jeu
-  //         normal — voir WORLD_*) ---------------------------------------------
-  if (body.pos.x < WORLD_X_MIN) { body.pos.x = WORLD_X_MIN; body.vel.x = 0; }
-  else if (body.pos.x > WORLD_X_MAX) { body.pos.x = WORLD_X_MAX; body.vel.x = 0; }
-  if (body.pos.z < WORLD_Z_MIN) { body.pos.z = WORLD_Z_MIN; body.vel.z = 0; }
-  else if (body.pos.z > WORLD_Z_MAX) { body.pos.z = WORLD_Z_MAX; body.vel.z = 0; }
+  //         normal — voir WORLD_*). `worldScale` suit mapScale (map agrandie
+  //         ou réduite en %) — identique client/serveur (même pack). --------
+  if (body.pos.x < WORLD_X_MIN * worldScale) { body.pos.x = WORLD_X_MIN * worldScale; body.vel.x = 0; }
+  else if (body.pos.x > WORLD_X_MAX * worldScale) { body.pos.x = WORLD_X_MAX * worldScale; body.vel.x = 0; }
+  if (body.pos.z < WORLD_Z_MIN * worldScale) { body.pos.z = WORLD_Z_MIN * worldScale; body.vel.z = 0; }
+  else if (body.pos.z > WORLD_Z_MAX * worldScale) { body.pos.z = WORLD_Z_MAX * worldScale; body.vel.z = 0; }
 }
 
 /** Variante de freeAt pour le step-up : ignore les obstacles dont le dessus

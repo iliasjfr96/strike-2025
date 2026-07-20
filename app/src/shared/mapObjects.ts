@@ -9,7 +9,7 @@
 // TypeScript pur : aucun DOM, aucun Node — importable des deux côtés.
 // ============================================================================
 
-import type { BaseTerrain, CustomPropDef, MapBaseEdit, PlacedObject } from './protocol';
+import type { BaseTerrain, CustomPropDef, GameModeConfig, MapBaseEdit, PlacedObject } from './protocol';
 import { MAP_BOUNDS, MAP_COLLIDERS } from './map';
 import type { MapBox } from './map';
 import type { AABB } from './sim';
@@ -77,11 +77,77 @@ export const MAX_PLACED_OBJECTS = 400;
 export const SCALE_MIN = 0.25;
 export const SCALE_MAX = 5;
 
-/** Dimensions de BASE d'un kind (palette intégrée OU prop custom du pack). */
+/** ZONES de mode de jeu (marqueurs SANS collision, posés dans l'éditeur) :
+ *  'zone:capture' = point de capture (domination) · 'zone:bombsite' = site de
+ *  bombe (R&D). L'empreinte XZ (échelle molette comprise) définit l'aire
+ *  jouable ; la hauteur est fixe. */
+export const ZONE_SIZES: Record<string, [number, number, number]> = {
+  'zone:capture': [8, 3, 8],
+  'zone:bombsite': [7, 3, 7],
+  // Spawns d'équipe plaçables (plusieurs par équipe = plusieurs points).
+  'zone:spawn0': [5, 3, 5],
+  'zone:spawn1': [5, 3, 5],
+};
+
+/** Nombre max de marqueurs de spawn par équipe. */
+export const MAX_SPAWN_MARKERS = 8;
+
+/** Vrai si ce kind est une zone de mode (jamais dans les colliders). */
+export function isZoneKind(kind: string): boolean {
+  return kind.startsWith('zone:');
+}
+
+/** Rectangle XZ d'une zone placée (échelle + rotation appliquées). */
+export interface ZoneRect {
+  cx: number;
+  cz: number;
+  hx: number;
+  hz: number;
+  y: number;
+}
+
+/** Rectangles des zones d'un kind, dans l'ORDRE DE PLACEMENT (c'est cet ordre
+ *  qui numérote les zones A, B, C… côté serveur ET client). */
+export function zoneRectsFromObjects(objects: PlacedObject[], kind: string, max: number): ZoneRect[] {
+  const base = ZONE_SIZES[kind];
+  if (!base) return [];
+  const out: ZoneRect[] = [];
+  for (const o of objects) {
+    if (o.kind !== kind) continue;
+    const sx = base[0] * (o.sx ?? 1);
+    const sz = base[2] * (o.sz ?? 1);
+    const odd = o.rot % 2 === 1;
+    out.push({
+      cx: o.x,
+      cz: o.z,
+      hx: (odd ? sz : sx) / 2,
+      hz: (odd ? sx : sz) / 2,
+      y: o.y,
+    });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Position (pieds) dans le volume d'une zone (marge verticale tolérante). */
+export function posInZone(x: number, y: number, z: number, zone: ZoneRect): boolean {
+  return (
+    Math.abs(x - zone.cx) <= zone.hx &&
+    Math.abs(z - zone.cz) <= zone.hz &&
+    y >= zone.y - 1.2 &&
+    y <= zone.y + 3.5
+  );
+}
+
+/** Dimensions de BASE d'un kind (palette intégrée, prop custom ou zone). */
 export function baseSizeForKind(kind: string, props?: CustomPropDef[]): [number, number, number] | null {
   if (kind.startsWith('prop:')) {
     const def = props?.find((p) => p.id === kind.slice(5));
     return def ? [def.sizeX, def.sizeY, def.sizeZ] : null;
+  }
+  if (isZoneKind(kind)) {
+    const size = ZONE_SIZES[kind];
+    return size ? [size[0], size[1], size[2]] : null;
   }
   const def = MAP_OBJECT_DEFS[kind];
   return def ? [def.size[0], def.size[1], def.size[2]] : null;
@@ -123,8 +189,9 @@ export function sanitizePlacedObjects(raw: unknown, props?: CustomPropDef[]): Pl
     const y = o.y as number;
     const z = o.z as number;
     if (!isFinite3(x, y, z)) continue;
-    if (x < MAP_BOUNDS.minX - 2 || x > MAP_BOUNDS.maxX + 2) continue;
-    if (z < MAP_BOUNDS.minZ - 2 || z > MAP_BOUNDS.maxZ + 2) continue;
+    // Bornes larges (×2) : la map peut être agrandie jusqu'à 200 % (mapScale).
+    if (x < MAP_BOUNDS.minX * 2 - 2 || x > MAP_BOUNDS.maxX * 2 + 2) continue;
+    if (z < MAP_BOUNDS.minZ * 2 - 2 || z > MAP_BOUNDS.maxZ * 2 + 2) continue;
     if (y < 0 || y > 30) continue;
     const rotRaw = typeof o.rot === 'number' ? Math.round(o.rot) : 0;
     const rot = (((rotRaw % 4) + 4) % 4) as 0 | 1 | 2 | 3;
@@ -236,6 +303,90 @@ export interface MapState {
   props?: CustomPropDef[];
   /** Terrain de départ — 'kestrel' (défaut) ou 'flat' (terrain vide). */
   baseTerrain?: BaseTerrain;
+  /** Mode de jeu du pack — absent = TDM classique. */
+  gameMode?: GameModeConfig;
+  /** Taille de la map en POURCENTS (50..200, footprint XZ — les hauteurs ne
+   *  changent pas). Absent/100 = taille d'origine. */
+  mapScale?: number;
+}
+
+/** Bornes de l'échelle de map (%). */
+export const MAP_SCALE_MIN = 50;
+export const MAP_SCALE_MAX = 200;
+
+/** Sanitise l'échelle de map : entier borné, 100 -> undefined (défaut). */
+export function sanitizeMapScale(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const v = Math.round(Math.min(MAP_SCALE_MAX, Math.max(MAP_SCALE_MIN, raw)));
+  return v === 100 ? undefined : v;
+}
+
+/** Facteur d'échelle XZ effectif d'un état (1 = taille d'origine). */
+export function mapScaleFactor(state: Pick<MapState, 'mapScale'>): number {
+  const v = state.mapScale;
+  return typeof v === 'number' && Number.isFinite(v)
+    ? Math.min(MAP_SCALE_MAX, Math.max(MAP_SCALE_MIN, v)) / 100
+    : 1;
+}
+
+// ----------------------------------------------------------------------------
+// Mode de jeu : bornes + sanitisation
+// ----------------------------------------------------------------------------
+
+/** Bornes [min, max] des réglages de mode (anti-abus). */
+export const MODE_LIMITS = {
+  scoreTarget: [10, 1000] as [number, number],
+  matchDurationS: [60, 1800] as [number, number],
+  captureTimeS: [2, 60] as [number, number],
+  pointsPerSecond: [1, 10] as [number, number],
+  roundTimeS: [30, 300] as [number, number],
+  plantTimeS: [1, 10] as [number, number],
+  defuseTimeS: [1, 15] as [number, number],
+  bombTimeS: [10, 120] as [number, number],
+  roundsToWin: [1, 15] as [number, number],
+};
+
+/** Valeurs par défaut d'un mode (appliquées quand un réglage est absent). */
+export const MODE_DEFAULTS: Required<Omit<GameModeConfig, 'type'>> = {
+  scoreTarget: 75,       // tdm ; l'éditeur propose 200 en dom
+  matchDurationS: 600,
+  captureTimeS: 10,
+  pointsPerSecond: 1,
+  roundTimeS: 105,
+  plantTimeS: 4,
+  defuseTimeS: 6,
+  bombTimeS: 40,
+  roundsToWin: 4,
+};
+
+/** Nombre max de zones exploitées par le serveur. */
+export const MAX_CAPTURE_ZONES = 8;
+export const MAX_BOMB_SITES = 2;
+
+/** Sanitise la config de mode d'un pack (fichier / réseau). undefined = TDM
+ *  classique. Chaque réglage présent est borné ; les absents restent absents
+ *  (les défauts s'appliquent à l'exécution). */
+export function sanitizeGameMode(raw: unknown): GameModeConfig | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (r.type !== 'tdm' && r.type !== 'dom' && r.type !== 'sad') return undefined;
+  const out: GameModeConfig = { type: r.type };
+  for (const key of Object.keys(MODE_LIMITS) as (keyof typeof MODE_LIMITS)[]) {
+    const v = r[key];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const [min, max] = MODE_LIMITS[key];
+    out[key] = Math.round(Math.min(max, Math.max(min, v)) * 10) / 10;
+  }
+  return out;
+}
+
+/** Réglage effectif d'un mode (valeur du pack bornée, sinon défaut). */
+export function modeSetting<K extends keyof typeof MODE_DEFAULTS>(
+  mode: GameModeConfig | undefined,
+  key: K,
+): number {
+  const v = mode?.[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : MODE_DEFAULTS[key];
 }
 
 /** Nombre max de props custom par pack. */
@@ -294,11 +445,23 @@ export const FLAT_WALLS: readonly MapBox[] = [
   { ...aabbFromBase(MAP_BOUNDS.maxX + 0.3, 0, (MAP_BOUNDS.minZ + MAP_BOUNDS.maxZ) / 2, 0.6, 4, MAP_BOUNDS.maxZ - MAP_BOUNDS.minZ + 1.2), kind: 'wall', color: '#9aa4ac', tex: 'concrete', uvScale: 4 },
 ];
 
-/** Boîtes de base EFFECTIVES d'un état : map de base éditée, ou murs
- *  d'enceinte seuls en terrain vide. */
-export function effectiveBaseBoxes(state: Pick<MapState, 'baseEdits' | 'baseTerrain'>): MapBox[] {
-  if (state.baseTerrain === 'flat') return FLAT_WALLS.map((b) => ({ ...b, min: { ...b.min }, max: { ...b.max } }));
-  return editedBaseBoxes(state.baseEdits);
+/** Boîtes de base EFFECTIVES d'un état : map de base éditée (ou murs
+ *  d'enceinte seuls en terrain vide), à l'ÉCHELLE du pack (mapScale % —
+ *  footprint XZ uniquement, les hauteurs ne bougent pas). */
+export function effectiveBaseBoxes(state: Pick<MapState, 'baseEdits' | 'baseTerrain' | 'mapScale'>): MapBox[] {
+  const boxes =
+    state.baseTerrain === 'flat'
+      ? FLAT_WALLS.map((b) => ({ ...b, min: { ...b.min }, max: { ...b.max } }))
+      : editedBaseBoxes(state.baseEdits);
+  const f = mapScaleFactor(state);
+  if (f === 1) return boxes;
+  for (const b of boxes) {
+    b.min.x *= f;
+    b.max.x *= f;
+    b.min.z *= f;
+    b.max.z *= f;
+  }
+  return boxes;
 }
 
 /** Construit un NOUVEAU tableau de colliders pour un état d'édition COMPLET
@@ -308,6 +471,7 @@ export function buildColliders(state: MapState): AABB[] {
   const out: AABB[] = [];
   for (const b of effectiveBaseBoxes(state)) out.push(b);
   for (const o of state.objects) {
+    if (isZoneKind(o.kind)) continue; // zones de mode : jamais solides
     const box = placedObjectAABB(o, state.props);
     if (box) out.push(box);
   }
@@ -319,8 +483,13 @@ export function buildColliders(state: MapState): AABB[] {
  * mutation EN PLACE du tableau MAP_COLLIDERS (le client ne vit que dans un
  * salon à la fois — sim de prédiction, raycasts de tir et fx le référencent).
  */
+/** Runtime CLIENT (mono-salon) : facteur d'échelle courant, lu par la
+ *  prédiction pour le clamp du monde (identique au serveur — même pack). */
+export const CLIENT_RUNTIME = { mapScale: 1 };
+
 export function applyMapState(state: MapState): void {
   const colliders = MAP_COLLIDERS as AABB[];
   colliders.length = 0;
   for (const b of buildColliders(state)) colliders.push(b);
+  CLIENT_RUNTIME.mapScale = mapScaleFactor(state);
 }

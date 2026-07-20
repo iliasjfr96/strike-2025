@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSyn
 import path from 'node:path';
 import { MAP_VERSION } from '../src/shared/map.js';
 import type { MapState } from '../src/shared/mapObjects.js';
-import { sanitizeBaseEdits, sanitizePlacedObjects, sanitizeProps } from '../src/shared/mapObjects.js';
+import { sanitizeBaseEdits, sanitizeGameMode, sanitizeMapScale, sanitizePlacedObjects, sanitizeProps } from '../src/shared/mapObjects.js';
 import { sanitizeLoadouts, sanitizeWeaponMods } from '../src/shared/weaponMods.js';
 
 const MAPS_DIR = path.resolve(process.cwd(), 'data', 'maps');
@@ -39,6 +39,8 @@ interface MapFile {
   loadouts?: unknown;
   props?: unknown;
   baseTerrain?: unknown;
+  gameMode?: unknown;
+  mapScale?: unknown;
 }
 
 /** Nettoie un nom affichable (map ou auteur) : 1..24 caractères sûrs. */
@@ -116,7 +118,7 @@ export function loadMap(slug: string): { meta: MapMetaInfo; state: MapState } | 
       objectCount: objects.length,
       baseEditCount: baseEdits.length,
     },
-    state: { objects, baseEdits, weaponMods, loadouts, props, baseTerrain: data.baseTerrain === 'flat' ? 'flat' : 'kestrel' },
+    state: { objects, baseEdits, weaponMods, loadouts, props, baseTerrain: data.baseTerrain === 'flat' ? 'flat' : 'kestrel', gameMode: sanitizeGameMode(data.gameMode), mapScale: sanitizeMapScale(data.mapScale) },
   };
 }
 
@@ -146,6 +148,8 @@ export function publishMap(
   rawLoadouts?: unknown,
   rawProps?: unknown,
   rawTerrain?: unknown,
+  rawGameMode?: unknown,
+  rawMapScale?: unknown,
 ): { slug: string; name: string } | null {
   const name = sanitizeLabel(rawName, 'Ma map');
   const author = sanitizeLabel(rawAuthor, 'anonyme');
@@ -155,7 +159,9 @@ export function publishMap(
   const weaponMods = sanitizeWeaponMods(rawWeaponMods);
   const loadouts = sanitizeLoadouts(rawLoadouts);
   const baseTerrain = rawTerrain === 'flat' ? 'flat' as const : 'kestrel' as const;
-  if (objects.length === 0 && baseEdits.length === 0 && Object.keys(weaponMods).length === 0 && baseTerrain === 'kestrel') return null;
+  const gameMode = sanitizeGameMode(rawGameMode);
+  const mapScale = sanitizeMapScale(rawMapScale);
+  if (objects.length === 0 && baseEdits.length === 0 && Object.keys(weaponMods).length === 0 && baseTerrain === 'kestrel' && gameMode === undefined) return null;
   mkdirSync(MAPS_DIR, { recursive: true });
   if (listMaps().length >= MAX_MAPS) return null;
   let slug = slugify(name);
@@ -175,6 +181,8 @@ export function publishMap(
     loadouts,
     props,
     baseTerrain,
+    gameMode,
+    mapScale,
   };
   try {
     const tmp = fileFor(slug) + '.tmp';

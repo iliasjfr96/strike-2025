@@ -7,7 +7,6 @@
 // ============================================================================
 
 import type { SpawnPoint } from '../src/shared/map.js';
-import { SPAWNS } from '../src/shared/map.js';
 import type { TeamId } from '../src/shared/protocol.js';
 import { HP_MAX } from '../src/shared/protocol.js';
 import { makeBody } from '../src/shared/sim.js';
@@ -28,7 +27,9 @@ export function chooseSpawn(game: Game, team: TeamId): SpawnPoint {
 
   let best: SpawnPoint[] = [];
   let bestScore = -Infinity;
-  for (const sp of SPAWNS[team]) {
+  // Spawns du PACK si le créateur en a placé, sinon spawns par défaut
+  // (mis à l'échelle de la map) — voir Game.spawnsFor.
+  for (const sp of game.spawnsFor(team)) {
     let dMin = Infinity;
     for (const e of enemies) {
       const d = Math.hypot(e.x - sp.x, e.z - sp.z);

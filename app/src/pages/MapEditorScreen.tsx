@@ -90,6 +90,166 @@ export default function MapEditorScreen() {
                 {st.carrying === 'base' ? 'OBJET DE BASE SAISI' : 'OBJET SAISI'} — CLIC GAUCHE : POSER · CLIC DROIT : ANNULER
               </p>
             )}
+            {/* Mode de jeu du pack */}
+            <div className="mt-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-dim">MODE DE JEU</p>
+              <div className="mt-1 flex gap-1">
+                {(
+                  [
+                    ['tdm', 'MATCH À MORT'],
+                    ['dom', 'DOMINATION'],
+                    ['sad', 'R&D'],
+                  ] as ['tdm' | 'dom' | 'sad', string][]
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      editor.setGameMode(m);
+                      forceRender();
+                    }}
+                    className={[
+                      'chamfer-6 flex-1 border px-1 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
+                      (editor.gameMode?.type ?? 'tdm') === m
+                        ? 'border-line-strong bg-[rgba(245,158,31,0.14)] text-text-hi'
+                        : 'border-line text-text-mid hover:border-line-strong hover:text-text-hi',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {editor.gameMode?.type === 'dom' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => editor.setKind('zone:capture')}
+                    className={[
+                      'chamfer-6 mt-1 w-full border px-2 py-1.5 text-left text-[12px] uppercase tracking-[0.1em] transition-colors',
+                      st.kind === 'zone:capture'
+                        ? 'border-line-strong bg-[rgba(88,166,232,0.16)] text-text-hi'
+                        : 'border-line text-[#58A6E8] hover:border-line-strong hover:text-text-hi',
+                    ].join(' ')}
+                  >
+                    ◎ POINT DE CAPTURE (A, B, C…)
+                  </button>
+                  <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1">
+                    {(
+                      [
+                        ['scoreTarget', 'Points cibles', 200],
+                        ['captureTimeS', 'Capture (s)', 10],
+                        ['pointsPerSecond', 'Pts/s/zone', 1],
+                        ['matchDurationS', 'Durée (s)', 600],
+                      ] as ['scoreTarget' | 'captureTimeS' | 'pointsPerSecond' | 'matchDurationS', string, number][]
+                    ).map(([key, label, def]) => (
+                      <label key={key} className="flex items-center justify-between gap-1 text-[10px] uppercase tracking-[0.06em] text-text-mid">
+                        {label}
+                        <input
+                          type="number"
+                          value={editor.gameMode?.[key] ?? def}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            editor.setModeSetting(key, Number.isFinite(v) ? v : undefined);
+                            forceRender();
+                          }}
+                          className="chamfer-6 w-[56px] border border-line bg-[rgba(6,9,12,0.7)] px-1 py-0.5 text-right text-[11px] text-text-hi outline-none focus:border-line-strong"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+              {editor.gameMode?.type === 'sad' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => editor.setKind('zone:bombsite')}
+                    className={[
+                      'chamfer-6 mt-1 w-full border px-2 py-1.5 text-left text-[12px] uppercase tracking-[0.1em] transition-colors',
+                      st.kind === 'zone:bombsite'
+                        ? 'border-line-strong bg-[rgba(245,158,31,0.16)] text-text-hi'
+                        : 'border-line text-amber hover:border-line-strong hover:text-text-hi',
+                    ].join(' ')}
+                  >
+                    ◈ SITE DE BOMBE (A / B)
+                  </button>
+                  <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1">
+                    {(
+                      [
+                        ['roundsToWin', 'Rounds gagnants', 4],
+                        ['roundTimeS', 'Round (s)', 105],
+                        ['plantTimeS', 'Pose (s)', 4],
+                        ['defuseTimeS', 'Désam. (s)', 6],
+                        ['bombTimeS', 'Bombe (s)', 40],
+                      ] as ['roundsToWin' | 'roundTimeS' | 'plantTimeS' | 'defuseTimeS' | 'bombTimeS', string, number][]
+                    ).map(([key, label, def]) => (
+                      <label key={key} className="flex items-center justify-between gap-1 text-[10px] uppercase tracking-[0.06em] text-text-mid">
+                        {label}
+                        <input
+                          type="number"
+                          value={editor.gameMode?.[key] ?? def}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            editor.setModeSetting(key, Number.isFinite(v) ? v : undefined);
+                            forceRender();
+                          }}
+                          className="chamfer-6 w-[56px] border border-line bg-[rgba(6,9,12,0.7)] px-1 py-0.5 text-right text-[11px] text-text-hi outline-none focus:border-line-strong"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Taille de la map (%) + spawns plaçables par équipe */}
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-dim">
+                TAILLE DE LA MAP
+              </span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={50}
+                  max={200}
+                  step={10}
+                  value={editor.mapScale}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (Number.isFinite(v)) {
+                      editor.setMapScale(v);
+                      forceRender();
+                    }
+                  }}
+                  className="chamfer-6 w-[64px] border border-line bg-[rgba(6,9,12,0.7)] px-1 py-0.5 text-right text-[12px] text-text-hi outline-none focus:border-line-strong"
+                />
+                <span className="text-[11px] text-text-dim">%</span>
+              </span>
+            </div>
+            <div className="mt-1 flex gap-1">
+              {(
+                [
+                  ['zone:spawn0', 'SPAWN SPECTRE', '#58A6E8'],
+                  ['zone:spawn1', 'SPAWN RAVAGE', '#E0563F'],
+                ] as [string, string, string][]
+              ).map(([kind, label, color]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => editor.setKind(kind)}
+                  className={[
+                    'chamfer-6 flex-1 border px-1 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] transition-colors',
+                    st.kind === kind
+                      ? 'border-line-strong bg-[rgba(245,158,31,0.14)] text-text-hi'
+                      : 'border-line hover:border-line-strong hover:text-text-hi',
+                  ].join(' ')}
+                  style={st.kind === kind ? undefined : { color }}
+                >
+                  ⌂ {label}
+                </button>
+              ))}
+            </div>
+
             {/* Terrain de départ du pack */}
             <div className="mt-2 flex gap-1">
               {(
@@ -191,9 +351,15 @@ export default function MapEditorScreen() {
               <p>U ou CTRL+Z — annuler · ÉCHAP — libérer la souris</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
-              <TacticalButton variant="primary" onClick={() => void editor.save()}>
-                {st.saving ? 'SAUVEGARDE…' : st.dirty ? 'SAUVEGARDER *' : 'SAUVEGARDER'}
+              <TacticalButton variant="primary" onClick={() => editor.save()}>
+                {st.dirty ? 'SAUVEGARDER LE BROUILLON *' : 'SAUVEGARDER LE BROUILLON'}
               </TacticalButton>
+              {/* Réservé à l'admin : applique le pack à la map jouée par défaut. */}
+              {typeof localStorage !== 'undefined' && localStorage.getItem('strike-admin-token') && (
+                <TacticalButton onClick={() => void editor.applyToMain()}>
+                  {st.saving ? 'APPLICATION…' : 'APPLIQUER AU SALON PRINCIPAL (ADMIN)'}
+                </TacticalButton>
+              )}
               <TacticalButton
                 onClick={() => {
                   setArmoryOpen((v) => !v);
@@ -213,7 +379,7 @@ export default function MapEditorScreen() {
                 ].join(' ')}
               >
                 {st.lastSaveOk
-                  ? 'SAUVEGARDÉ — ACTIF POUR TOUS LES JOUEURS'
+                  ? st.lastSaveMsg ?? 'SAUVEGARDÉ'
                   : st.lastSaveError ?? 'ÉCHEC DE SAUVEGARDE — SERVEUR INJOIGNABLE ?'}
               </p>
             )}

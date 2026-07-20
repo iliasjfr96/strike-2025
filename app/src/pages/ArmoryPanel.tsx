@@ -68,7 +68,12 @@ function defaultValue(id: WeaponId, key: keyof typeof STAT_LIMITS): number {
 
 export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
-  const [tab, setTab] = useState<WeaponId>('vsk27');
+  // Les armes de BASE ne sont modifiables que par l'ADMIN (le serveur retire
+  // de toute façon leurs mods des packs publiés — sanitizeWeaponMods).
+  const isAdmin =
+    typeof localStorage !== 'undefined' && !!localStorage.getItem('strike-admin-token');
+  const visibleTabs = isAdmin ? WEAPON_TABS : WEAPON_TABS.filter((w) => w.id.startsWith('custom'));
+  const [tab, setTab] = useState<WeaponId>(isAdmin ? 'vsk27' : 'custom1');
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -174,9 +179,16 @@ export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
             Les réglages font partie du pack (sauvegarde + publication). Bornés côté serveur.
           </p>
 
+          {!isAdmin && (
+            <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-text-dim">
+              Les armes de base du jeu sont gérées par l'admin — créez les vôtres dans les
+              emplacements CUSTOM (importables, calibrables, assignables aux classes).
+            </p>
+          )}
+
           {/* Onglets armes */}
           <div className="mt-3 flex flex-wrap gap-2">
-            {WEAPON_TABS.map((w) => (
+            {visibleTabs.map((w) => (
               <button
                 key={w.id}
                 type="button"
