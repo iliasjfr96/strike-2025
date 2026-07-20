@@ -38,10 +38,17 @@ interface WeaponDef {
   realLength: number;
   /** Rotation Y (rad) amenant le canon sur -Z (mesurée par inspection du GLB). */
   rotY: number;
+  /** Rotations LIBRES additionnelles (rad) : tangage / roulis (armurerie). */
+  rotX?: number;
+  rotZ?: number;
   /** Hauteur de la ligne de visée au-dessus du centre bbox (m, échelle finale). */
   adsY: number;
   /** Hauteur de la bouche du canon au-dessus du centre bbox (m, échelle finale). */
   muzzleY: number;
+  /** Décalages de position (m, échelle finale) : droite / haut / avant(-Z). */
+  offX?: number;
+  offY?: number;
+  offZ?: number;
   /** Texture couleur custom (remplace les matériaux du modèle). */
   map?: string;
   /** Texture normale custom (relief). */
@@ -55,6 +62,12 @@ const DEFS: Record<WeaponId, WeaponDef> = {
   kv9: { file: './weapons/smg-ump.glb', realLength: 0.69, rotY: Math.PI / 2, adsY: 0.152, muzzleY: 0.025 },
   lr50: { file: './weapons/sniper-m21.glb', realLength: 1.12, rotY: 0, adsY: 0.075, muzzleY: 0.012 },
   p9: { file: './weapons/pistol-9mm.glb', realLength: 0.21, rotY: -Math.PI / 2, adsY: 0.074, muzzleY: 0.045 },
+  // Les 4 modèles AdamKokrito ont la bouche en +X (mesuré par analyse des
+  // sommets GLB — sections d'extrémité) : rotY +PI/2, PAS -PI/2.
+  m4: { file: './weapons/ar-m4.glb', realLength: 0.9, rotY: Math.PI / 2, adsY: 0.115, muzzleY: 0.03 },
+  mp5: { file: './weapons/smg-mp5.glb', realLength: 0.68, rotY: Math.PI / 2, adsY: 0.13, muzzleY: 0.035 },
+  spas12: { file: './weapons/shotgun-mossberg.glb', realLength: 0.79, rotY: Math.PI / 2, adsY: 0.1, muzzleY: 0.03 },
+  deagle: { file: './weapons/pistol-deagle.glb', realLength: 0.27, rotY: Math.PI / 2, adsY: 0.06, muzzleY: 0.035 },
   // Emplacements custom : modèle AR par défaut tant que le pack n'en fournit pas.
   custom1: { file: './weapons/ar-akm.glb', realLength: 0.88, rotY: -Math.PI / 2, adsY: 0.118, muzzleY: 0.02 },
   custom2: { file: './weapons/ar-akm.glb', realLength: 0.88, rotY: -Math.PI / 2, adsY: 0.118, muzzleY: 0.02 },
@@ -79,26 +92,25 @@ export function setWeaponModelMods(mods: WeaponModsConfig): WeaponId[] {
     const model = mods[id]?.model;
     const prev = modelOverrides.get(id);
     if (model) {
-      if (
-        prev?.file === model.file &&
-        prev.rotY === model.rotY &&
-        prev.realLength === model.realLength &&
-        prev.adsY === model.adsY &&
-        prev.muzzleY === model.muzzleY &&
-        prev.map === model.map &&
-        prev.normalMap === model.normalMap
-      ) {
-        continue; // identique — cache conservé
-      }
-      modelOverrides.set(id, {
-        file: model.file,
+      // `file` absent = calibration LIBRE du modèle d'ORIGINE de l'arme.
+      const next: WeaponDef = {
+        file: model.file ?? DEFS[id].file,
         realLength: model.realLength,
         rotY: model.rotY,
+        rotX: model.rotX,
+        rotZ: model.rotZ,
         adsY: model.adsY,
         muzzleY: model.muzzleY,
+        offX: model.offX,
+        offY: model.offY,
+        offZ: model.offZ,
         map: model.map,
         normalMap: model.normalMap,
-      });
+      };
+      if (prev && JSON.stringify(prev) === JSON.stringify(next)) {
+        continue; // identique — cache conservé
+      }
+      modelOverrides.set(id, next);
       changed.push(id);
     } else if (prev) {
       modelOverrides.delete(id);
@@ -117,8 +129,9 @@ function normalize(gltfScene: THREE.Group, def: WeaponDef): NormalizedWeapon {
   const inner = new THREE.Group();
   inner.add(gltfScene);
 
-  // 1. Orientation explicite (vérité terrain de chaque GLB — voir DEFS).
-  gltfScene.rotation.y = def.rotY;
+  // 1. Orientation explicite (vérité terrain de chaque GLB — voir DEFS)
+  //    + rotations LIBRES de calibration (tangage rotX, roulis rotZ).
+  gltfScene.rotation.set(def.rotX ?? 0, def.rotY, def.rotZ ?? 0);
   gltfScene.updateMatrixWorld(true);
 
   // 2. Échelle réelle sur l'axe canon (Z après rotation) + recentrage.
@@ -135,6 +148,8 @@ function normalize(gltfScene: THREE.Group, def: WeaponDef): NormalizedWeapon {
   inner.scale.setScalar(scale);
   const center2 = box2.getCenter(new THREE.Vector3());
   gltfScene.position.sub(center2);
+  // Décalage LIBRE de calibration (m finaux — inner est déjà à l'échelle).
+  inner.position.set(def.offX ?? 0, def.offY ?? 0, def.offZ ?? 0);
 
   const root = new THREE.Group();
   root.add(inner);
@@ -144,7 +159,7 @@ function normalize(gltfScene: THREE.Group, def: WeaponDef): NormalizedWeapon {
   const box3 = new THREE.Box3().setFromObject(root);
   const muzzle = new THREE.Object3D();
   muzzle.name = '__muzzle__';
-  muzzle.position.set(0, def.muzzleY, box3.min.z + 0.01);
+  muzzle.position.set(def.offX ?? 0, def.muzzleY, box3.min.z + 0.01);
   root.add(muzzle);
   const adsY = def.adsY;
 

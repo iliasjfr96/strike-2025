@@ -12,7 +12,6 @@ import type { TeamScores, WeaponId } from '../src/shared/protocol.js';
 import {
   ASSIST_MIN_DAMAGE,
   ASSIST_WINDOW_S,
-  HEADSHOT_MULTIPLIER,
   HISTORY_MAX_AGE_MS,
   LAG_COMP_MARGIN_MS,
   POINTS_ASSIST,
@@ -48,6 +47,9 @@ export interface ShotRequest {
   dir: Vec3;
   weapon: WeaponId;
   ads: boolean;
+  /** Nombre de plombs à évaluer (1 = tir simple). Le serveur génère le cône
+   *  de dispersion lui-même autour de `dir` (anti-triche). */
+  pellets?: number;
 }
 
 /**
@@ -100,11 +102,7 @@ export function fireShot(game: Game, p: ServerPlayer, req: ShotRequest): void {
   const od = Math.hypot(origin.x - eye.x, origin.y - eye.y, origin.z - eye.z);
   if (!(od <= 1.5)) origin = eye;
 
-  // Raycast map d'abord (colliders DU SALON) : distance du mur le plus proche.
-  const wall = raycastAABBs(origin, dir, game.colliders, SHOT_MAX_DIST);
-  const wallDist = wall ? wall.dist : SHOT_MAX_DIST;
-
-  // ---- Lag compensation -----------------------------------------------------
+  // ---- Lag compensation (cibles figées une fois pour tous les rayons) ------
   const rewind = clampNum(p.rttMs / 2 + LAG_COMP_MARGIN_MS, 0, HISTORY_MAX_AGE_MS);
   const targetTime = now - rewind;
   const targets: PlayerTarget[] = [];
@@ -119,36 +117,84 @@ export function fireShot(game: Game, p: ServerPlayer, req: ShotRequest): void {
     targets.push({ id: e.id, box: playerAABB(vec3(px, py, pz), h) });
   }
 
-  const hit = raycastPlayers(origin, dir, targets, wallDist);
-  if (!hit) return;
-  const victim = game.players.get(hit.id);
-  if (!victim || !victim.alive || victim.team === p.team) return;
-
-  // ---- Dégâts ----------------------------------------------------------------
-  let dmg = spec.falloff
-    ? damageAtDistance(spec.damage, hit.dist, spec.falloff.start, spec.falloff.end, spec.falloff.minMult)
-    : spec.damage;
-  if (hit.isHead) dmg *= HEADSHOT_MULTIPLIER;
-  dmg = Math.round(dmg);
-  if (dmg <= 0) return;
-
-  victim.hp -= dmg;
-  victim.lastDamageAt = now;
-  // Élague les entrées hors fenêtre d'assist (sinon un joueur qui régénère
-  // sans mourir accumule des entrées pendant toute la partie).
-  const cutoff = now - ASSIST_WINDOW_S * 1000;
-  while (victim.damageLog.length > 0 && victim.damageLog[0].at < cutoff) {
-    victim.damageLog.shift();
+  // ---- Plombs : N rayons en cône serveur, dégâts cumulés par victime --------
+  const pellets = spec.pellets !== undefined && (req.pellets ?? 1) > 1
+    ? Math.min(spec.pellets, Math.max(1, Math.floor(req.pellets ?? 1)))
+    : 1;
+  const coneDeg = spec.spread[req.ads ? 'ads' : 'hip'];
+  const dmgByVictim = new Map<number, { dmg: number; head: boolean }>();
+  for (let i = 0; i < pellets; i++) {
+    const pdir = pellets > 1 ? coneDir(dir, coneDeg) : dir;
+    const wall = raycastAABBs(origin, pdir, game.colliders, SHOT_MAX_DIST);
+    const wallDist = wall ? wall.dist : SHOT_MAX_DIST;
+    const hit = raycastPlayers(origin, pdir, targets, wallDist);
+    if (!hit) continue;
+    const victim = game.players.get(hit.id);
+    if (!victim || !victim.alive || victim.team === p.team) continue;
+    let dmg = spec.falloff
+      ? damageAtDistance(spec.damage, hit.dist, spec.falloff.start, spec.falloff.end, spec.falloff.minMult)
+      : spec.damage;
+    if (hit.isHead) dmg *= spec.headMult;
+    const acc = dmgByVictim.get(hit.id) ?? { dmg: 0, head: false };
+    acc.dmg += dmg;
+    acc.head = acc.head || hit.isHead;
+    dmgByVictim.set(hit.id, acc);
   }
-  victim.damageLog.push({ attackerId: p.id, damage: dmg, at: now });
 
-  const hpLeft = Math.max(0, Math.round(victim.hp));
-  game.sendTo(p.id, { t: 'ev', kind: 'hit', targetId: victim.id, damage: dmg, hp: hpLeft, head: hit.isHead });
-  game.sendTo(victim.id, { t: 'ev', kind: 'damage', fromId: p.id, damage: dmg, hp: hpLeft, head: hit.isHead });
+  // ---- Application des dégâts (une entrée par victime et par cartouche) -----
+  for (const [victimId, acc] of dmgByVictim) {
+    const victim = game.players.get(victimId);
+    if (!victim || !victim.alive || victim.team === p.team) continue;
+    const dmg = Math.round(acc.dmg);
+    if (dmg <= 0) continue;
 
-  if (victim.hp <= 0) {
-    applyKill(game, p, victim, w.id, hit.isHead, now);
+    victim.hp -= dmg;
+    victim.lastDamageAt = now;
+    // Élague les entrées hors fenêtre d'assist (sinon un joueur qui régénère
+    // sans mourir accumule des entrées pendant toute la partie).
+    const cutoff = now - ASSIST_WINDOW_S * 1000;
+    while (victim.damageLog.length > 0 && victim.damageLog[0].at < cutoff) {
+      victim.damageLog.shift();
+    }
+    victim.damageLog.push({ attackerId: p.id, damage: dmg, at: now });
+
+    const hpLeft = Math.max(0, Math.round(victim.hp));
+    game.sendTo(p.id, { t: 'ev', kind: 'hit', targetId: victim.id, damage: dmg, hp: hpLeft, head: acc.head });
+    game.sendTo(victim.id, { t: 'ev', kind: 'damage', fromId: p.id, damage: dmg, hp: hpLeft, head: acc.head });
+
+    if (victim.hp <= 0) {
+      applyKill(game, p, victim, w.id, acc.head, now);
+    }
   }
+}
+
+/** Direction aléatoire dans un cône de `angleDeg` autour de `dir` (dispersion
+ *  des plombs côté serveur — le client n'envoie que la direction centrale). */
+function coneDir(dir: Vec3, angleDeg: number): Vec3 {
+  const angle = (angleDeg * Math.PI) / 180;
+  const u = Math.random();
+  const v = Math.random() * Math.PI * 2;
+  const r = Math.tan(angle) * Math.sqrt(u);
+  // Base orthonormée autour de dir.
+  const ax = Math.abs(dir.x) < 0.9 ? vec3(1, 0, 0) : vec3(0, 1, 0);
+  let tx = dir.y * ax.z - dir.z * ax.y;
+  let ty = dir.z * ax.x - dir.x * ax.z;
+  let tz = dir.x * ax.y - dir.y * ax.x;
+  const tl = Math.hypot(tx, ty, tz) || 1;
+  tx /= tl; ty /= tl; tz /= tl;
+  const bx = dir.y * tz - dir.z * ty;
+  const by = dir.z * tx - dir.x * tz;
+  const bz = dir.x * ty - dir.y * tx;
+  const cx = Math.cos(v) * r;
+  const cy = Math.sin(v) * r;
+  const out = vec3(
+    dir.x + tx * cx + bx * cy,
+    dir.y + ty * cx + by * cy,
+    dir.z + tz * cx + bz * cy,
+  );
+  const l = Math.hypot(out.x, out.y, out.z) || 1;
+  out.x /= l; out.y /= l; out.z /= l;
+  return out;
 }
 
 /** Mort d'un joueur : stats, assists, score d'équipe, événements, victoire. */

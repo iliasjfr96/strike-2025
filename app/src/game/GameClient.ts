@@ -1035,6 +1035,8 @@ export class GameClient {
     const spreadDeg = spec.spread.hip + (spec.spread.ads - spec.spread.hip) * this.adsT;
     const dir = this.spreadDir(this.input.yaw, this.input.pitch, spreadDeg);
     const eye = eyePos(this.prediction.body);
+    // Plombs (fusil à pompe) : UNE cartouche consommée, N rayons côté serveur.
+    const pellets = spec.pellets ?? 1;
 
     // Envoi au serveur (le serveur valide cadence/munitions/origine).
     this.net?.send({
@@ -1048,6 +1050,7 @@ export class GameClient {
       dz: dir.z,
       weapon: spec.id,
       ads: this.adsT > 0.5,
+      pellets,
     });
 
     // Recul caméra (degrés → radians, §7 : transmis au serveur via les inputs
@@ -1055,8 +1058,8 @@ export class GameClient {
     this.input.pitch = clampPitch(this.input.pitch + (spec.recoil.vertical * Math.PI) / 180);
     this.input.yaw += ((Math.random() * 2 - 1) * spec.recoil.horizontal * Math.PI) / 180;
 
-    // Effets locaux : kick viewmodel, flash, tracante + impact (visuel — le
-    // serveur seul décide des touches).
+    // Effets locaux : kick viewmodel, flash, tracante(s) + impact(s) (visuel —
+    // le serveur seul décide des touches).
     this.weaponView.kick(spec.recoil.vertical);
     this.weaponView.muzzleFlash();
     // Origine écran des fx monde : la bouche du canon est dessinée par la
@@ -1067,21 +1070,25 @@ export class GameClient {
     // Étui éjecté (direction droite de la caméra).
     this.tmpV2.set(1, 0, 0).applyQuaternion(this.renderer.camera.quaternion);
     this.effects.ejectCasing(this.tmpV1, this.tmpV2);
-    const hit = raycastAABBs(eye, dir, COLLIDERS, SHOT_MAX_DIST);
-    this.tmpV2.set(dir.x, dir.y, dir.z);
-    if (hit) {
-      this.tmpV3.set(hit.point.x, hit.point.y, hit.point.z);
-      this.effects.impact(hit.point, hit.normal);
-      this.effects.impactDecal(hit.point, hit.normal);
-    } else {
-      this.tmpV3
-        .copy(this.tmpV2)
-        .multiplyScalar(SHOT_MAX_DIST)
-        .add(this.tmpV1.set(eye.x, eye.y, eye.z));
+    // Tracantes/impacts : un rayon par plomb (visuel uniquement).
+    for (let i = 0; i < pellets; i++) {
+      const vdir = pellets > 1 ? this.spreadDir(this.input.yaw, this.input.pitch, spreadDeg) : dir;
+      const hit = raycastAABBs(eye, vdir, COLLIDERS, SHOT_MAX_DIST);
+      this.tmpV2.set(vdir.x, vdir.y, vdir.z);
+      if (hit) {
+        this.tmpV3.set(hit.point.x, hit.point.y, hit.point.z);
+        this.effects.impact(hit.point, hit.normal);
+        if (i < 3) this.effects.impactDecal(hit.point, hit.normal);
+      } else {
+        this.tmpV3
+          .copy(this.tmpV2)
+          .multiplyScalar(SHOT_MAX_DIST)
+          .add(this.tmpV1.set(eye.x, eye.y, eye.z));
+      }
+      this.weaponView.getMuzzleWorld(this.tmpV1);
+      this.renderer.viewmodelToWorld(this.tmpV1, 0.9, this.tmpV1);
+      this.effects.tracer(this.tmpV1, this.tmpV3);
     }
-    this.weaponView.getMuzzleWorld(this.tmpV1);
-    this.renderer.viewmodelToWorld(this.tmpV1, 0.9, this.tmpV1);
-    this.effects.tracer(this.tmpV1, this.tmpV3);
     this.audio.shot(spec.id, 0);
     this.pushAmmo();
   }

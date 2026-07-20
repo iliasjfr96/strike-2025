@@ -113,12 +113,15 @@ export const TEAM_COLORS: Record<TeamId, string> = {
 };
 
 /** Classes prédéfinies (voir weapons.ts — CLASS_DEFS). */
-export type ClassId = 'assault' | 'cqc' | 'recon';
+export type ClassId = 'assault' | 'cqc' | 'recon' | 'breacher';
 
 /** Identifiants d'armes (voir weapons.ts — WEAPONS). custom1-3 sont des
  *  EMPLACEMENTS d'armes créées par la communauté (armurerie) : nom, stats et
  *  modèle définis par le pack du salon, assignés aux classes via `loadouts`. */
-export type WeaponId = 'vsk27' | 'kv9' | 'lr50' | 'p9' | 'custom1' | 'custom2' | 'custom3';
+export type WeaponId =
+  | 'vsk27' | 'kv9' | 'lr50' | 'p9'
+  | 'm4' | 'mp5' | 'spas12' | 'deagle'
+  | 'custom1' | 'custom2' | 'custom3';
 
 /** Slot d'arme : 0 = primaire, 1 = secondaire. */
 export type WeaponSlot = 0 | 1;
@@ -241,16 +244,26 @@ export interface WeaponStatsMod {
 /** Modèle 3D custom d'une arme (cosmétique — uploadé via /mods/models) avec
  *  sa calibration (les GLB arrivent dans tous les axes/échelles). */
 export interface WeaponModelMod {
-  /** Chemin serveur du modèle : /mods/models/<hash>.<ext> UNIQUEMENT. */
-  file: string;
+  /** Chemin serveur du modèle : /mods/models/<hash>.<ext> UNIQUEMENT.
+   *  ABSENT = calibration LIBRE du modèle d'ORIGINE de l'arme. */
+  file?: string;
   /** Rotation Y (rad) amenant le canon sur -Z. */
   rotY: number;
+  /** Rotation X libre (rad) — tangage (canon qui pique/monte). */
+  rotX?: number;
+  /** Rotation Z libre (rad) — roulis (arme penchée). */
+  rotZ?: number;
   /** Longueur réelle cible (m). */
   realLength: number;
   /** Hauteur de la ligne de visée au-dessus du centre (m). */
   adsY: number;
   /** Hauteur de la bouche du canon au-dessus du centre (m). */
   muzzleY: number;
+  /** Décalages de position du modèle (m, après normalisation) : droite/haut/
+   *  avant (-Z = vers l'avant, donc offZ négatif avance l'arme). */
+  offX?: number;
+  offY?: number;
+  offZ?: number;
   /** Texture couleur (albedo) : /mods/textures/<hash>.<ext> — remplace les
    *  matériaux du modèle (indispensable pour FBX/OBJ/STL sans textures). */
   map?: string;
@@ -400,6 +413,9 @@ export interface ShootMsg {
   dz: number;
   weapon: WeaponId;
   ads: boolean;
+  /** Nombre de plombs (fusil à pompe uniquement) : 1 par défaut. Le serveur
+   *  consomme UNE cartouche par tir et évalue `pellets` rayons en cône. */
+  pellets?: number;
 }
 
 export interface ReloadMsg {

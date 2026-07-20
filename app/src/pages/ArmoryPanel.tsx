@@ -9,7 +9,7 @@
 import { useReducer, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import type { ClassId, WeaponId, WeaponStatsMod } from '../shared/protocol';
+import type { ClassId, WeaponId, WeaponModelMod, WeaponStatsMod } from '../shared/protocol';
 import { CLASS_LOADOUTS_ORIGINAL, STAT_LIMITS, WEAPONS_ORIGINAL } from '../shared/weaponMods';
 import { defaultModelDef } from '../game/render/WeaponModels';
 import { gameClient } from '../game/instance';
@@ -21,16 +21,21 @@ const WEAPON_TABS: { id: WeaponId; label: string }[] = [
   { id: 'kv9', label: 'KV-9' },
   { id: 'lr50', label: 'LR-50' },
   { id: 'p9', label: 'P9' },
+  { id: 'm4', label: 'M4' },
+  { id: 'mp5', label: 'MP5' },
+  { id: 'spas12', label: 'M590' },
+  { id: 'deagle', label: 'DEAGLE' },
   { id: 'custom1', label: 'CUSTOM 1' },
   { id: 'custom2', label: 'CUSTOM 2' },
   { id: 'custom3', label: 'CUSTOM 3' },
 ];
 
-const ALL_WEAPON_IDS: WeaponId[] = ['vsk27', 'kv9', 'lr50', 'p9', 'custom1', 'custom2', 'custom3'];
+const ALL_WEAPON_IDS: WeaponId[] = ['vsk27', 'kv9', 'lr50', 'p9', 'm4', 'mp5', 'spas12', 'deagle', 'custom1', 'custom2', 'custom3'];
 const CLASS_TABS: { id: ClassId; label: string }[] = [
   { id: 'assault', label: 'ASSAUT' },
   { id: 'cqc', label: 'CQC' },
   { id: 'recon', label: 'RECON' },
+  { id: 'breacher', label: 'BREACHER' },
 ];
 
 /** Champs de stats exposés (libellé FR + clé + pas). */
@@ -84,9 +89,42 @@ export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
     forceRender();
   };
 
-  const setModelField = (key: 'rotY' | 'realLength' | 'adsY' | 'muzzleY', v: number): void => {
-    if (!model || !Number.isFinite(v)) return;
-    editor.setWeaponModel(tab, { ...model, [key]: v });
+  // Calibration EFFECTIVE : valeurs du mod, complétées par le modèle d'origine
+  // (l'arme de base est calibrable librement, même sans upload — file absent).
+  const base = defaultModelDef(tab);
+  const cal = {
+    file: model?.file ?? base.file,
+    rotY: model?.rotY ?? base.rotY,
+    rotX: model?.rotX ?? base.rotX ?? 0,
+    rotZ: model?.rotZ ?? base.rotZ ?? 0,
+    realLength: model?.realLength ?? base.realLength,
+    adsY: model?.adsY ?? base.adsY,
+    muzzleY: model?.muzzleY ?? base.muzzleY,
+    offX: model?.offX ?? 0,
+    offY: model?.offY ?? 0,
+    offZ: model?.offZ ?? 0,
+    map: model?.map,
+    normalMap: model?.normalMap,
+  };
+
+  /** Modifie la calibration — crée le mod à la volée (sans file : arme de base). */
+  const setCal = (patch: Partial<WeaponModelMod>): void => {
+    const next: WeaponModelMod = {
+      file: model?.file,
+      rotY: cal.rotY,
+      rotX: model?.rotX,
+      rotZ: model?.rotZ,
+      realLength: cal.realLength,
+      adsY: cal.adsY,
+      muzzleY: cal.muzzleY,
+      offX: model?.offX,
+      offY: model?.offY,
+      offZ: model?.offZ,
+      map: model?.map,
+      normalMap: model?.normalMap,
+      ...patch,
+    };
+    editor.setWeaponModel(tab, next);
     forceRender();
   };
 
@@ -137,7 +175,7 @@ export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
           </p>
 
           {/* Onglets armes */}
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {WEAPON_TABS.map((w) => (
               <button
                 key={w.id}
@@ -267,8 +305,9 @@ export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
               <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-amber">{uploadMsg}</p>
             )}
 
-            {/* Fenêtre d'aperçu 3D — modèle custom OU modèle d'origine. */}
-            <WeaponPreview def={model ? { ...model } : defaultModelDef(tab)} />
+            {/* Fenêtre d'aperçu 3D — modèle custom OU modèle d'origine,
+                avec la calibration LIVE (rotations/offsets libres). */}
+            <WeaponPreview def={{ ...cal }} />
 
             {model && (
               <div className="mt-2 flex items-center gap-2">
@@ -304,55 +343,107 @@ export default function ArmoryPanel({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
-            {model && (
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
-                <label className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.08em] text-text-mid">
-                  Rotation canon
-                  <span className="flex gap-1">
-                    {[0, 90, 180, 270].map((deg) => (
-                      <button
-                        key={deg}
-                        type="button"
-                        onClick={() => setModelField('rotY', (deg * Math.PI) / 180)}
-                        className={[
-                          'chamfer-6 border px-1.5 py-0.5 text-[11px]',
-                          Math.abs(((model.rotY * 180) / Math.PI + 360) % 360 - deg) < 1
-                            ? 'border-line-strong text-amber'
-                            : 'border-line text-text-mid hover:text-text-hi',
-                        ].join(' ')}
-                      >
-                        {deg}°
-                      </button>
-                    ))}
-                  </span>
-                </label>
-                {(
-                  [
-                    ['realLength', 'Longueur (m)', 0.05],
-                    ['adsY', 'Hauteur visée (m)', 0.005],
-                    ['muzzleY', 'Hauteur bouche (m)', 0.005],
-                  ] as ['realLength' | 'adsY' | 'muzzleY', string, number][]
-                ).map(([key, label, step]) => (
-                  <label
-                    key={key}
-                    className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.08em] text-text-mid"
-                  >
-                    {label}
+            {/* Calibration LIBRE — arme de base OU modèle uploadé. */}
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-text-hi">
+                CALIBRATION LIBRE {model && <span className="text-amber">*</span>}
+              </p>
+              {model && (
+                <TacticalButton
+                  onClick={() => {
+                    // Modèle uploadé : garde le fichier, calibration remise à
+                    // plat ; arme de base : retire tout le mod (origine).
+                    if (model.file) {
+                      editor.setWeaponModel(tab, {
+                        file: model.file,
+                        rotY: 0,
+                        realLength: 0.8,
+                        adsY: 0.08,
+                        muzzleY: 0.02,
+                        map: model.map,
+                        normalMap: model.normalMap,
+                      });
+                    } else {
+                      editor.setWeaponModel(tab, null);
+                    }
+                    forceRender();
+                  }}
+                >
+                  ↺ RÉINITIALISER
+                </TacticalButton>
+              )}
+            </div>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {(
+                [
+                  ['rotY', 'Rotation canon (Y)'],
+                  ['rotX', 'Tangage (X)'],
+                  ['rotZ', 'Roulis (Z)'],
+                ] as ['rotY' | 'rotX' | 'rotZ', string][]
+              ).map(([key, label]) => {
+                const deg = Math.round((cal[key] * 180) / Math.PI);
+                return (
+                  <label key={key} className="flex items-center gap-2 text-[11px] uppercase tracking-[0.08em] text-text-mid">
+                    <span className="w-[128px] shrink-0">{label}</span>
+                    <input
+                      type="range"
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={deg}
+                      onChange={(e) => setCal({ [key]: (Number(e.target.value) * Math.PI) / 180 })}
+                      className="min-w-0 flex-1 accent-[#F59E1F]"
+                    />
                     <input
                       type="number"
-                      value={model[key]}
-                      step={step}
-                      onChange={(e) => setModelField(key, Number(e.target.value))}
-                      className="chamfer-6 w-[84px] border border-line bg-[rgba(6,9,12,0.7)] px-1.5 py-0.5 text-right text-[12px] text-text-hi outline-none focus:border-line-strong"
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={deg}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (Number.isFinite(v)) setCal({ [key]: (Math.min(180, Math.max(-180, v)) * Math.PI) / 180 });
+                      }}
+                      className="chamfer-6 w-[64px] border border-line bg-[rgba(6,9,12,0.7)] px-1 py-0.5 text-right text-[12px] text-text-hi outline-none focus:border-line-strong"
                     />
+                    <span className="w-[8px] text-text-dim">°</span>
                   </label>
-                ))}
-                <p className="col-span-2 text-[10px] uppercase tracking-[0.08em] text-text-dim">
-                  Aperçu : ligne bleue = ligne de visée · sphère ambre = bouche du canon.
-                  Le canon doit pointer vers -Z (utilisez les boutons de rotation).
-                </p>
-              </div>
-            )}
+                );
+              })}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+              {(
+                [
+                  ['realLength', 'Longueur (m)', 0.05],
+                  ['adsY', 'Hauteur visée (m)', 0.005],
+                  ['muzzleY', 'Hauteur bouche (m)', 0.005],
+                  ['offX', 'Position droite (m)', 0.01],
+                  ['offY', 'Position haut (m)', 0.01],
+                  ['offZ', 'Position avant (m)', 0.01],
+                ] as ['realLength' | 'adsY' | 'muzzleY' | 'offX' | 'offY' | 'offZ', string, number][]
+              ).map(([key, label, step]) => (
+                <label
+                  key={key}
+                  className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.08em] text-text-mid"
+                >
+                  {label}
+                  <input
+                    type="number"
+                    value={cal[key]}
+                    step={step}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v)) setCal({ [key]: v });
+                    }}
+                    className="chamfer-6 w-[84px] border border-line bg-[rgba(6,9,12,0.7)] px-1.5 py-0.5 text-right text-[12px] text-text-hi outline-none focus:border-line-strong"
+                  />
+                </label>
+              ))}
+              <p className="col-span-2 text-[10px] uppercase tracking-[0.08em] text-text-dim">
+                Aperçu : ligne bleue = ligne de visée · sphère ambre = bouche du canon (doit pointer
+                vers l'avant). Réglages libres — appliqués en jeu à la sauvegarde du pack.
+              </p>
+            </div>
           </div>
 
           {/* Loadouts : assigner les armes (dont custom) aux classes */}

@@ -7,6 +7,10 @@
 | AKM (`ar-akm.glb`) | J-Toastie | CC-BY 3.0 | poly.pizza/m/ZBBoDqAn0A |
 | Submachine Gun UMP (`smg-ump.glb`) | Quaternius | CC0 (domaine public) | poly.pizza/m/7ehatxr7FY |
 | M21 EBR (`sniper-m21.glb`) | austincford | CC-BY 3.0 | poly.pizza/m/iZPuYSKNrm |
+| M4 Carbine (`ar-m4.glb`) | AdamKokrito | CC-BY 3.0 | poly.pizza/m/vx8dQfkzNM |
+| MP5 (`smg-mp5.glb`) | AdamKokrito | CC-BY 3.0 | poly.pizza/m/q73J0Y8eko |
+| Mossberg 590A1 (`shotgun-mossberg.glb`) | J-Toastie | CC-BY 3.0 | poly.pizza/m/eAh1oHY32T |
+| Desert Eagle (`pistol-deagle.glb`) | AdamKokrito | CC-BY 3.0 | poly.pizza/m/5HnKjrbxUx |
 | 9mm Pistol (`pistol-9mm.glb`) | Quaternius | CC-BY 3.0 | poly.pizza/m/BoZWhFdsj4 |
 
 ## Textures PBR (public/textures/kestrel/)

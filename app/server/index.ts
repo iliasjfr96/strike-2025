@@ -580,7 +580,7 @@ const server = createServer((req, res) => {
           for (const mod of Object.values(s.weaponMods ?? {})) {
             const m = mod?.model;
             if (m) {
-              referenced.add(path.basename(m.file));
+              if (m.file) referenced.add(path.basename(m.file)); // absent = modèle d'origine
               if (m.map) referenced.add(path.basename(m.map));
               if (m.normalMap) referenced.add(path.basename(m.normalMap));
             }

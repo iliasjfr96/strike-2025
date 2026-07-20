@@ -65,10 +65,10 @@ export default function MapEditorScreen() {
         initial={{ opacity: 0, x: -16 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.25 }}
-        className="pointer-events-auto absolute left-4 top-4 w-[240px]"
+        className="pointer-events-auto absolute left-4 top-4 flex max-h-[calc(100vh-32px)] w-[240px] flex-col"
       >
-        <Panel>
-          <div className="p-3">
+        <Panel className="flex min-h-0 flex-col">
+          <div className="flex min-h-0 flex-col p-3">
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-amber">
               /// MODE BUILD
             </p>
@@ -113,7 +113,9 @@ export default function MapEditorScreen() {
                 </button>
               ))}
             </div>
-            <div className="mt-3 flex flex-col gap-1">
+            {/* Liste défilante (la palette dépasse l'écran depuis les 22
+                nouveaux props) — la molette est libre hors pointer lock. */}
+            <div className="mt-3 flex min-h-0 flex-col gap-1 overflow-y-auto pr-1">
               {Object.entries(MAP_OBJECT_DEFS).map(([kind, def]) => (
                 <button
                   key={kind}

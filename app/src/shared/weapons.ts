@@ -68,6 +68,8 @@ export interface WeaponSpec {
   mobility: number;
   /** Temps (ms) après un switch avant de pouvoir tirer (draw time). */
   drawMs: number;
+  /** Nombre de plombs par cartouche (fusil à pompe). Absent = tir simple. */
+  pellets?: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -157,6 +159,88 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     mobility: 1.08,
     drawMs: 250,
   },
+  // M4 : AR plus nerveux que la VSK-27 (cadence haute, recul doux).
+  m4: {
+    id: 'm4',
+    name: 'M4 CARBINE',
+    slot: 0,
+    auto: true,
+    damage: 29,
+    headMult: HEADSHOT_MULTIPLIER,
+    rpm: 700,
+    magSize: 30,
+    reserveAmmo: 120,
+    reloadMs: 2000,
+    adsMs: 210,
+    adsFovMult: 0.8,
+    recoil: { vertical: 0.48, horizontal: 0.22 },
+    spread: { hip: 2.0, ads: 0.3 },
+    falloff: { start: 25, end: 60, minMult: 0.65 },
+    mobility: 1.02,
+    drawMs: 380,
+  },
+  // MP5 : SMG précis et stable, cadence très haute.
+  mp5: {
+    id: 'mp5',
+    name: 'MP5',
+    slot: 0,
+    auto: true,
+    damage: 25,
+    headMult: HEADSHOT_MULTIPLIER,
+    rpm: 800,
+    magSize: 30,
+    reserveAmmo: 120,
+    reloadMs: 2100,
+    adsMs: 170,
+    adsFovMult: 0.85,
+    recoil: { vertical: 0.4, horizontal: 0.24 },
+    spread: { hip: 2.4, ads: 0.45 },
+    falloff: { start: 22, end: 55, minMult: 0.6 },
+    mobility: 1.07,
+    drawMs: 340,
+  },
+  // M590 « Breacher » : fusil à pompe — 8 plombs par cartouche, dégâts qui
+  // s'effondrent avec la distance. Une cartouche consommée par tir.
+  spas12: {
+    id: 'spas12',
+    name: 'M590 BREACHER',
+    slot: 0,
+    auto: false, // pompe : un tir par action
+    damage: 12, // par PLOMB (x8 = 96 à bout touchant)
+    headMult: 1.4, // headshot plomb moins décisif qu'une balle
+    rpm: 70,
+    magSize: 8,
+    reserveAmmo: 32,
+    reloadMs: 3200,
+    adsMs: 240,
+    adsFovMult: 0.9,
+    recoil: { vertical: 2.4, horizontal: 0.7 },
+    spread: { hip: 4.5, ads: 3.2 },
+    falloff: { start: 8, end: 26, minMult: 0.15 }, // létalité CQC seulement
+    mobility: 0.96,
+    drawMs: 480,
+    pellets: 8,
+  },
+  // Desert Eagle : pistolet lourd, gros dégâts, gros recul.
+  deagle: {
+    id: 'deagle',
+    name: 'DESERT EAGLE',
+    slot: 1,
+    auto: false,
+    damage: 50,
+    headMult: HEADSHOT_MULTIPLIER,
+    rpm: 260,
+    magSize: 7,
+    reserveAmmo: 28,
+    reloadMs: 1900,
+    adsMs: 170,
+    adsFovMult: 0.85,
+    recoil: { vertical: 1.8, horizontal: 0.5 },
+    spread: { hip: 1.8, ads: 0.5 },
+    falloff: { start: 15, end: 45, minMult: 0.5 },
+    mobility: 1.08,
+    drawMs: 280,
+  },
   // ---- Emplacements d'armes CUSTOM (armurerie communautaire) ---------------
   // Base neutre type fusil d'assaut ; nom/stats/modèle définis par le pack du
   // salon (weaponMods), assignés aux classes via `loadouts`.
@@ -188,7 +272,8 @@ function makeCustomSpec(id: WeaponId, name: string): WeaponSpec {
   };
 }
 
-export const WEAPON_IDS: WeaponId[] = ['vsk27', 'kv9', 'lr50', 'p9', 'custom1', 'custom2', 'custom3'];
+/** Tous les ids d'armes — dérivé de WEAPONS : ne peut jamais être périmé. */
+export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
 
 export function getWeapon(id: WeaponId): WeaponSpec {
   return WEAPONS[id];
@@ -232,9 +317,15 @@ export const CLASS_DEFS: Record<ClassId, ClassDef> = {
     description: 'Sniper LR-50 à verrou : élimination en une balle bien placée.',
     loadout: ['lr50', 'p9'],
   },
+  breacher: {
+    id: 'breacher',
+    name: 'Breacher',
+    description: 'Fusil à pompe M590 + Desert Eagle : le roi du corps à corps.',
+    loadout: ['spas12', 'deagle'],
+  },
 };
 
-export const CLASS_IDS: ClassId[] = ['assault', 'cqc', 'recon'];
+export const CLASS_IDS: ClassId[] = ['assault', 'cqc', 'recon', 'breacher'];
 
 export function getClass(id: ClassId): ClassDef {
   return CLASS_DEFS[id];

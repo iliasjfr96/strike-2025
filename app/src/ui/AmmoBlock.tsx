@@ -125,7 +125,7 @@ export default function AmmoBlock() {
         </div>
 
         <p className="mt-1.5 font-hud text-[13px] font-semibold uppercase tracking-[0.18em] text-text-dim">
-          {weapon.name} — {weapon.auto ? 'AUTO' : weapon.id === 'p9' ? 'SEMI' : 'VERROU'}
+          {weapon.name} — {weapon.auto ? 'AUTO' : weapon.id === 'lr50' ? 'VERROU' : weapon.id === 'spas12' ? 'POMPE' : 'SEMI'}
         </p>
         {empty && (
           <p className="mt-0.5 font-hud text-[11px] font-semibold uppercase tracking-[0.22em] text-amber">

@@ -726,6 +726,215 @@ export class MapBuilder {
 
   private customGroup: THREE.Group | null = null;
   private readonly customMats = new Map<string, THREE.MeshStandardMaterial>();
+  /** Matériaux des props FAÇONNÉS (clé texture|couleur — partagés). */
+  private readonly shapeMats = new Map<string, THREE.MeshStandardMaterial>();
+  /** Matériau grillage (texture canvas chain-link, transparent). */
+  private fenceMat: THREE.MeshStandardMaterial | null = null;
+
+  /** Matériau PBR partagé d'un prop façonné. */
+  private shapeMat(tex: string, color?: string): THREE.MeshStandardMaterial {
+    const key = `${tex}|${color ?? ''}`;
+    let m = this.shapeMats.get(key);
+    if (!m) {
+      m = pbrMaterial(tex, { color });
+      this.shapeMats.set(key, m);
+    }
+    return m;
+  }
+
+  /**
+   * Formes RÉELLES des props d'éditeur non parallélépipédiques (fûts, pneus,
+   * cône, citerne, palettes…). Visuel uniquement : la COLLISION reste l'AABB
+   * de MAP_OBJECT_DEFS (identique client/serveur). Groupe : base à y=0,
+   * centré en XZ, dimensions sx/sy/sz déjà mises à l'échelle. Retourne null
+   * pour les kinds naturellement « boîte » (caisse, container, mur…).
+   */
+  private buildShapedProp(kind: string, sx: number, sy: number, sz: number): THREE.Group | null {
+    const def = MAP_OBJECT_DEFS[kind];
+    if (!def) return null;
+    const g = new THREE.Group();
+    const mat = this.shapeMat(def.tex, def.color);
+    const add = (geom: THREE.BufferGeometry, x: number, y: number, z: number, m: THREE.Material = mat, rx = 0, rz = 0): THREE.Mesh => {
+      const mesh = new THREE.Mesh(geom, m);
+      mesh.position.set(x, y, z);
+      if (rx !== 0) mesh.rotation.x = rx;
+      if (rz !== 0) mesh.rotation.z = rz;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+      return mesh;
+    };
+    const box = (w: number, h: number, d: number, x: number, y: number, z: number, m: THREE.Material = mat): void => {
+      const geom = new THREE.BoxGeometry(w, h, d);
+      applyWorldUV(geom, 1.6);
+      add(geom, x, y, z, m);
+    };
+
+    switch (kind) {
+      case 'barrel_metal':
+      case 'barrel_blue': {
+        // Fût : cylindre + 2 anneaux de renfort.
+        const r = Math.min(sx, sz) / 2;
+        add(new THREE.CylinderGeometry(r * 0.96, r * 0.96, sy, 20), 0, sy / 2, 0);
+        add(new THREE.CylinderGeometry(r, r, sy * 0.05, 20), 0, sy * 0.28, 0);
+        add(new THREE.CylinderGeometry(r, r, sy * 0.05, 20), 0, sy * 0.72, 0);
+        return g;
+      }
+      case 'pallet':
+      case 'pallet_stack': {
+        // Palette(s) : 3 chevrons + 5 lattes. Empilée : 4 niveaux.
+        const levels = kind === 'pallet_stack' ? 4 : 1;
+        const ph = sy / levels;
+        for (let l = 0; l < levels; l++) {
+          const y0 = l * ph;
+          for (let i = -1; i <= 1; i++) {
+            box(sx * 0.96, ph * 0.55, sz * 0.14, 0, y0 + ph * 0.275, i * sz * 0.4);
+          }
+          for (let i = -2; i <= 2; i++) {
+            box(sx * 0.16, ph * 0.3, sz * 0.98, i * sx * 0.21, y0 + ph * 0.75, 0);
+          }
+        }
+        return g;
+      }
+      case 'sandbags': {
+        // Sacs : sphères aplaties en quinconce sur 3 rangs.
+        const rows = 3;
+        const bh = sy / rows;
+        const geom = new THREE.SphereGeometry(1, 10, 8);
+        for (let r0 = 0; r0 < rows; r0++) {
+          const n = r0 % 2 === 0 ? 4 : 3;
+          for (let i = 0; i < n; i++) {
+            const m = add(geom.clone(), (i - (n - 1) / 2) * (sx / 4.2), r0 * bh + bh * 0.52, 0);
+            m.scale.set(sx / 7.2, bh * 0.62, sz * 0.5);
+          }
+        }
+        geom.dispose(); // seuls les clones sont montés
+        return g;
+      }
+      case 'tire_stack': {
+        // Pile de pneus : 4 tores à plat.
+        const outer = Math.min(sx, sz) / 2;
+        const tube = sy / 8;
+        for (let i = 0; i < 4; i++) {
+          add(new THREE.TorusGeometry(outer - tube, tube, 10, 20), 0, (i + 0.5) * (sy / 4), 0, mat, Math.PI / 2);
+        }
+        return g;
+      }
+      case 'tank': {
+        // Citerne : cylindre horizontal + calottes + 2 berceaux.
+        const r = Math.min(sy, sz) / 2 - 0.12;
+        const len = sx * 0.72;
+        const cy = 0.24 + r;
+        add(new THREE.CylinderGeometry(r, r, len, 20), 0, cy, 0, mat, 0, Math.PI / 2);
+        const cap = new THREE.SphereGeometry(r, 16, 12);
+        add(cap, len / 2, cy, 0).scale.set(0.45, 1, 1);
+        add(cap.clone(), -len / 2, cy, 0).scale.set(0.45, 1, 1);
+        box(sx * 0.12, cy, sz * 0.8, len * 0.32, cy / 2, 0);
+        box(sx * 0.12, cy, sz * 0.8, -len * 0.32, cy / 2, 0);
+        return g;
+      }
+      case 'fence_metal': {
+        // Grillage : 2 poteaux + lisse haute/basse + toile chain-link.
+        if (!this.fenceMat) {
+          this.fenceMat = new THREE.MeshStandardMaterial({
+            map: makeChainLinkTexture(),
+            transparent: true,
+            side: THREE.DoubleSide,
+            color: '#cfd4d8',
+            roughness: 0.6,
+            metalness: 0.6,
+          });
+        }
+        box(0.08, sy, 0.08, -sx / 2 + 0.04, sy / 2, 0);
+        box(0.08, sy, 0.08, sx / 2 - 0.04, sy / 2, 0);
+        box(sx, 0.05, 0.05, 0, sy - 0.03, 0);
+        box(sx, 0.05, 0.05, 0, 0.06, 0);
+        const web = add(new THREE.PlaneGeometry(sx - 0.12, sy - 0.14), 0, sy / 2, 0, this.fenceMat);
+        web.castShadow = false;
+        return g;
+      }
+      case 'pipe': {
+        // Tuyau couché + brides aux extrémités.
+        const r = Math.min(sy, sz) / 2 * 0.82;
+        add(new THREE.CylinderGeometry(r, r, sx * 0.96, 16), 0, r, 0, mat, 0, Math.PI / 2);
+        add(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.08, 16), sx * 0.44, r, 0, mat, 0, Math.PI / 2);
+        add(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.08, 16), -sx * 0.44, r, 0, mat, 0, Math.PI / 2);
+        return g;
+      }
+      case 'beam': {
+        // Poutre IPN : semelles + âme.
+        box(sx, sy * 0.22, sz, 0, sy * 0.11, 0);
+        box(sx, sy * 0.56, sz * 0.3, 0, sy * 0.5, 0);
+        box(sx, sy * 0.22, sz, 0, sy * 0.89, 0);
+        return g;
+      }
+      case 'scaffold': {
+        // Échafaudage : 4 montants, lisses, plancher grillagé.
+        const px = sx / 2 - 0.05;
+        const pz = sz / 2 - 0.05;
+        for (const ix of [-1, 1]) {
+          for (const iz of [-1, 1]) {
+            box(0.07, sy, 0.07, ix * px, sy / 2, iz * pz);
+          }
+        }
+        for (const y of [sy * 0.45, sy * 0.92]) {
+          box(sx, 0.06, 0.06, 0, y, -pz);
+          box(sx, 0.06, 0.06, 0, y, pz);
+          box(0.06, 0.06, sz, -px, y, 0);
+          box(0.06, 0.06, sz, px, y, 0);
+        }
+        box(sx * 0.96, 0.06, sz * 0.96, 0, sy * 0.98, 0, this.shapeMat('metal_grate_rusty'));
+        return g;
+      }
+      case 'desk_metal': {
+        // Établi : plateau + 4 pieds + étagère basse.
+        box(sx, 0.08, sz, 0, sy - 0.04, 0);
+        box(sx * 0.94, 0.06, sz * 0.9, 0, sy * 0.32, 0);
+        for (const ix of [-1, 1]) {
+          for (const iz of [-1, 1]) {
+            box(0.07, sy - 0.08, 0.07, ix * (sx / 2 - 0.06), (sy - 0.08) / 2, iz * (sz / 2 - 0.06));
+          }
+        }
+        return g;
+      }
+      case 'gravel_heap': {
+        // Tas : dôme (demi-sphère écrasée).
+        const dome = new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+        add(dome, 0, 0, 0).scale.set(sx / 2, sy, sz / 2);
+        return g;
+      }
+      case 'cone': {
+        // Cône de chantier : socle + cône.
+        box(sx * 0.85, sy * 0.06, sz * 0.85, 0, sy * 0.03, 0);
+        add(new THREE.ConeGeometry(Math.min(sx, sz) * 0.32, sy * 0.94, 14), 0, sy * 0.06 + sy * 0.47, 0);
+        return g;
+      }
+      case 'blocks': {
+        // Parpaings : 2 blocs côte à côte + 1 décalé au-dessus.
+        const bh = sy / 2;
+        box(sx * 0.46, bh * 0.94, sz * 0.92, -sx * 0.25, bh / 2, 0);
+        box(sx * 0.46, bh * 0.94, sz * 0.92, sx * 0.25, bh / 2, 0);
+        box(sx * 0.46, bh * 0.94, sz * 0.92, 0, bh * 1.5, 0);
+        return g;
+      }
+      case 'sign_panel': {
+        // Panneau : 2 pieds + plaque haute.
+        box(0.06, sy, 0.06, -sx * 0.35, sy / 2, 0);
+        box(0.06, sy, 0.06, sx * 0.35, sy / 2, 0);
+        box(sx, sy * 0.55, sz, 0, sy * 0.68, 0);
+        return g;
+      }
+      case 'locker': {
+        // Casier : corps + 2 portes en léger relief + poignées.
+        box(sx, sy, sz * 0.9, 0, sy / 2, -sz * 0.05);
+        box(sx * 0.44, sy * 0.94, sz * 0.12, -sx * 0.24, sy / 2, sz * 0.4);
+        box(sx * 0.44, sy * 0.94, sz * 0.12, sx * 0.24, sy / 2, sz * 0.4);
+        return g;
+      }
+      default:
+        return null; // boîte texturée standard (caisse, container, mur…)
+    }
+  }
 
   /** Groupe des objets placés (raycasts de l'éditeur : placement/suppression). */
   get customObjectsGroup(): THREE.Group | null {
@@ -787,6 +996,21 @@ export class MapBuilder {
 
       const def = MAP_OBJECT_DEFS[o.kind];
       if (!def) continue;
+
+      // Props FAÇONNÉS (fût, pneus, cône, citerne…) : vraie forme visuelle,
+      // collision AABB inchangée.
+      const shaped = this.buildShapedProp(o.kind, sx, sy, sz);
+      if (shaped) {
+        shaped.position.set(o.x, o.y, o.z);
+        shaped.rotation.y = (o.rot * Math.PI) / 2;
+        shaped.userData.objId = o.id;
+        shaped.traverse((n) => {
+          n.userData.objId = o.id;
+        });
+        g.add(shaped);
+        continue;
+      }
+
       let mat = this.customMats.get(o.kind);
       if (!mat) {
         mat = pbrMaterial(def.tex, { color: def.color });

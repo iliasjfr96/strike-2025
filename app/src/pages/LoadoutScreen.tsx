@@ -14,6 +14,7 @@ import {
   Crosshair as CrosshairIcon,
   EyeOff,
   Shield,
+  Target,
   Thermometer,
   Wind,
   Zap,
@@ -92,9 +93,21 @@ const CLASS_CONTENT: Record<ClassId, ClassContent> = {
     ],
     weaponType: 'FUSIL DE PRÉCISION — VERROU',
   },
+  breacher: {
+    role: 'DÉMOLITION — CQC EXTRÊME',
+    tagline: 'Le M590 débouche les portes, le Deagle les achève. Roi du contact.',
+    icon: Target,
+    operator: '/operator-breacher.png',
+    accessories: ['CHOKE TACTIQUE', 'CROSSE PISTOLET'],
+    perks: [
+      { icon: Zap, label: 'MARTEAU' },
+      { icon: Shield, label: 'BLINDÉ' },
+    ],
+    weaponType: 'FUSIL À POMPE — POMPE (8 PLOMBS)',
+  },
 };
 
-const CLASS_NAMES: Record<ClassId, string> = { assault: 'ASSAUT', cqc: 'CQC', recon: 'RECON' };
+const CLASS_NAMES: Record<ClassId, string> = { assault: 'ASSAUT', cqc: 'CQC', recon: 'RECON', breacher: 'BREACHER' };
 
 /** Mini-stats condensées des cartes (loadout.md §B) : DÉGÂTS / CADENCE /10. */
 function miniStats(w: WeaponSpec): { deg: number; cad: number } {
@@ -135,7 +148,19 @@ function ttkLabel(w: WeaponSpec): string {
 }
 
 function weaponRender(weapon: WeaponId): string {
-  return `/weapon-${weapon === 'vsk27' ? 'vsk27' : weapon === 'kv9' ? 'kv9' : weapon === 'lr50' ? 'lr50' : 'p9'}.png`;
+  // Rendus dédiés quand disponibles, sinon rendu d'arme générique par type.
+  switch (weapon) {
+    case 'm4':
+      return '/weapon-m4.png';
+    case 'mp5':
+      return '/weapon-mp5.png';
+    case 'spas12':
+      return '/weapon-m590.png';
+    case 'deagle':
+      return '/weapon-deagle.png';
+    default:
+      return `/weapon-${weapon === 'vsk27' ? 'vsk27' : weapon === 'kv9' ? 'kv9' : weapon === 'lr50' ? 'lr50' : 'p9'}.png`;
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -439,6 +464,9 @@ export default function LoadoutScreen() {
 
   const detailClass = hovered ?? classId;
   const team: TeamId = myTeam ?? 0;
+  // Arme secondaire de la classe sélectionnée (P9 par défaut, Deagle breacher).
+  const secondaryId: WeaponId = CLASS_DEFS[detailClass].loadout[1];
+  const secondaryName = WEAPONS[secondaryId].name;
 
   const deploy = () => {
     if (deploying) return;
@@ -573,18 +601,23 @@ export default function LoadoutScreen() {
         transition={{ delay: reduced ? 0 : 0.35, duration: 0.24, ease: EASE_OUT_EXPO }}
         className="relative z-20 mt-6 flex h-[88px] items-center justify-between border-t border-line bg-[rgba(6,9,12,0.55)] px-12 backdrop-blur-md xl:px-16"
       >
-        {/* Secondaire P9 */}
+        {/* Secondaire (selon la classe : P9 ou Deagle pour le breacher) */}
         <div>
           <p className="mb-1 font-hud text-[11px] font-semibold uppercase tracking-[0.22em] text-text-dim">
             ARME SECONDAIRE — TOUCHE 2
           </p>
           <Panel className="flex h-14 w-[260px] items-center gap-3 px-4" brackets={false}>
-            <img src="/weapon-p9.png" alt="P9" draggable={false} className="h-[40px] w-auto object-contain" />
+            <img
+              src={secondaryId === 'deagle' ? '/weapon-deagle.png' : '/weapon-p9.png'}
+              alt={secondaryId === 'deagle' ? 'Deagle' : 'P9'}
+              draggable={false}
+              className="h-[40px] w-auto object-contain"
+            />
             <span className="font-hud text-[14px] font-semibold uppercase tracking-[0.1em] text-text-hi">
-              P9 — PISTOLET
+              {secondaryName}
             </span>
             <span className="ml-auto chamfer-6 bg-steel/15 px-2 py-0.5 font-hud text-[10px] font-semibold uppercase tracking-[0.2em] text-steel">
-              COMMUN
+              {secondaryId === 'deagle' ? 'LOURD' : 'COMMUN'}
             </span>
           </Panel>
         </div>

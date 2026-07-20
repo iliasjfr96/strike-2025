@@ -23,6 +23,26 @@
     <path fill="currentColor" d="M14 11 L16 7 L40 7 L40 5 L44 5 L44 7 L48 7 L48 12 L34 12 L32 21 L22 21 L20 12 L14 12 Z"/>
   </symbol>
 
+  <!-- M4 : carabine avec carry handle -->
+  <symbol id="icon-m4" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M1 14 L4 9 L12 9 L14 6 L22 6 L22 8 L26 8 L26 6 L30 6 L30 8 L42 8 L42 7 L48 7 L48 9 L62 9 L62 12 L48 12 L48 14 L40 14 L38 21 L31 21 L29 14 L24 14 L22 22 L13 22 L11 14 Z"/>
+  </symbol>
+
+  <!-- MP5 : pistolet-mitrailleur avec crosse -->
+  <symbol id="icon-mp5" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M2 13 L4 9 L10 9 L10 7 L22 7 L22 9 L40 9 L40 8 L46 8 L46 10 L58 10 L58 12 L46 12 L46 13 L32 13 L34 22 L25 22 L23 13 L20 13 L18 20 L11 20 L9 13 Z"/>
+  </symbol>
+
+  <!-- M590 : fusil à pompe -->
+  <symbol id="icon-spas12" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M0 14 L3 10 L16 10 L18 8 L24 8 L24 10 L44 10 L44 9 L50 9 L50 11 L63 11 L63 13 L50 13 L50 12 L36 12 L36 15 L24 15 L22 12 L14 12 L12 19 L4 19 Z"/>
+  </symbol>
+
+  <!-- Desert Eagle : gros pistolet -->
+  <symbol id="icon-deagle" viewBox="0 0 64 24">
+    <path fill="currentColor" d="M8 10 L10 5 L14 5 L14 3 L18 3 L18 5 L46 5 L46 4 L50 4 L50 6 L54 6 L54 11 L34 11 L32 22 L18 22 L16 11 L8 11 Z"/>
+  </symbol>
+
   <!-- Headshot : crâne stylisé dans une mire -->
   <symbol id="icon-headshot" viewBox="0 0 24 24">
     <path fill="currentColor" fill-rule="evenodd" d="M12 2 A10 10 0 1 0 22 12 A10 10 0 1 0 12 2 Z M12 5 A7 7 0 1 1 5 12 A7 7 0 1 1 12 5 Z"/>

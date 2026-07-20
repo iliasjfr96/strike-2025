@@ -415,12 +415,18 @@ export class Game {
     }
     if (typeof m.ads !== 'boolean') return;
     if (typeof m.weapon !== 'string' || !(m.weapon in WEAPONS)) return;
+    // Plombs (fusil à pompe) : entier borné, 1 par défaut (tir simple).
+    let pellets = 1;
+    if (typeof m.pellets === 'number' && Number.isFinite(m.pellets)) {
+      pellets = Math.max(1, Math.min(16, Math.floor(m.pellets)));
+    }
     fireShot(this, p, {
       seq: m.seq,
       origin: { x: m.ox, y: m.oy, z: m.oz },
       dir: { x: m.dx, y: m.dy, z: m.dz },
       weapon: m.weapon,
       ads: m.ads,
+      pellets,
     });
   }
 

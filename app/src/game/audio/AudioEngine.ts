@@ -20,6 +20,10 @@ const SHOT_TIMBRE: Record<WeaponId, { freq: number; q: number; decay: number; ga
   kv9: { freq: 1250, q: 0.9, decay: 0.085, gain: 0.42, thump: 170 },
   lr50: { freq: 520, q: 0.7, decay: 0.28, gain: 0.75, thump: 90 },
   p9: { freq: 1500, q: 1.0, decay: 0.07, gain: 0.4, thump: 200 },
+  m4: { freq: 1050, q: 0.85, decay: 0.11, gain: 0.48, thump: 150 },
+  mp5: { freq: 1350, q: 0.95, decay: 0.075, gain: 0.4, thump: 185 },
+  spas12: { freq: 420, q: 0.6, decay: 0.24, gain: 0.85, thump: 70 },
+  deagle: { freq: 700, q: 0.8, decay: 0.16, gain: 0.6, thump: 110 },
 };
 
 export class AudioEngine {

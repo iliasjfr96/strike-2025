@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import type {
   BaseTerrain,
+  ClassId,
   ClassLoadouts,
   CustomPropDef,
   MapBaseEdit,
@@ -858,7 +859,7 @@ export class MapEditorController {
   }
 
   /** Assigne un loadout à une classe (null = loadout d'origine). */
-  setClassLoadout(classId: 'assault' | 'cqc' | 'recon', pair: [WeaponId, WeaponId] | null): void {
+  setClassLoadout(classId: ClassId, pair: [WeaponId, WeaponId] | null): void {
     if (pair === null) delete this.loadouts[classId];
     else this.loadouts[classId] = pair;
     this.dirty = true;

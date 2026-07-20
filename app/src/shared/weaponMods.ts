@@ -21,7 +21,7 @@ import type {
   WeaponStatsMod,
 } from './protocol';
 import type { WeaponSpec } from './weapons';
-import { CLASS_DEFS, WEAPONS } from './weapons';
+import { CLASS_DEFS, WEAPONS, WEAPON_IDS } from './weapons';
 
 // ----------------------------------------------------------------------------
 // Bornes anti-triche (min, max) par stat
@@ -46,9 +46,14 @@ export const STAT_LIMITS: Record<Exclude<keyof WeaponStatsMod, 'auto' | 'name'>,
 /** Bornes de calibration d'un modèle custom. */
 export const MODEL_LIMITS = {
   rotY: [-6.3, 6.3] as [number, number],
+  rotX: [-3.15, 3.15] as [number, number],
+  rotZ: [-3.15, 3.15] as [number, number],
   realLength: [0.1, 2.5] as [number, number],
   adsY: [0, 0.5] as [number, number],
   muzzleY: [-0.2, 0.5] as [number, number],
+  offX: [-0.5, 0.5] as [number, number],
+  offY: [-0.5, 0.5] as [number, number],
+  offZ: [-0.5, 0.5] as [number, number],
 };
 
 /** Chemin de fichier modèle autorisé (uploadé par NOTRE serveur uniquement).
@@ -58,8 +63,10 @@ const MODEL_FILE_RE = /^\/mods\/models\/[a-z0-9]{8,64}\.(glb|gltf|fbx|obj|stl)$/
 /** Chemin de texture autorisé (uploadée via /mods/textures). */
 const TEXTURE_FILE_RE = /^\/mods\/textures\/[a-z0-9]{8,64}\.(png|jpg|webp)$/;
 
-const WEAPON_IDS: WeaponId[] = ['vsk27', 'kv9', 'lr50', 'p9', 'custom1', 'custom2', 'custom3'];
-const CLASS_IDS_LOCAL: ClassId[] = ['assault', 'cqc', 'recon'];
+// WEAPON_IDS (importé de weapons.ts, dérivé de WEAPONS) construit la table
+// d'armes de chaque salon (buildWeaponTable) et valide les loadouts — une
+// arme absente serait injouable en salon custom et refusée à l'assignation.
+const CLASS_IDS_LOCAL: ClassId[] = ['assault', 'cqc', 'recon', 'breacher'];
 
 function clampNum(v: unknown, [min, max]: [number, number]): number | undefined {
   if (typeof v !== 'number' || !Number.isFinite(v)) return undefined;
@@ -101,15 +108,23 @@ export function sanitizeWeaponMods(raw: unknown): WeaponModsConfig {
       const realLength = clampNum(m.realLength, MODEL_LIMITS.realLength);
       const adsY = clampNum(m.adsY, MODEL_LIMITS.adsY);
       const muzzleY = clampNum(m.muzzleY, MODEL_LIMITS.muzzleY);
+      // `file` ABSENT = calibration libre du modèle d'ORIGINE de l'arme ;
+      // présent, il DOIT être un upload de notre serveur (jamais d'URL).
+      const fileOk = typeof m.file === 'string' && MODEL_FILE_RE.test(m.file);
       if (
-        typeof m.file === 'string' &&
-        MODEL_FILE_RE.test(m.file) &&
+        (fileOk || m.file === undefined) &&
         rotY !== undefined &&
         realLength !== undefined &&
         adsY !== undefined &&
         muzzleY !== undefined
       ) {
-        entry.model = { file: m.file, rotY, realLength, adsY, muzzleY };
+        entry.model = { rotY, realLength, adsY, muzzleY };
+        if (fileOk) entry.model.file = m.file as string;
+        // Rotations/offsets libres : optionnels, 0 = absent (compact).
+        for (const k of ['rotX', 'rotZ', 'offX', 'offY', 'offZ'] as const) {
+          const v = clampNum(m[k], MODEL_LIMITS[k]);
+          if (v !== undefined && v !== 0) entry.model[k] = v;
+        }
         if (typeof m.map === 'string' && TEXTURE_FILE_RE.test(m.map)) {
           entry.model.map = m.map;
         }

@@ -31,12 +31,16 @@ const WEAPON_ACCESSORY: Record<WeaponId, string> = {
   kv9: 'LASER TACTIQUE',
   lr50: 'LUNETTE 8X',
   p9: 'VISEUR TRITIUM',
+  m4: 'CARRY HANDLE',
+  mp5: 'CROSSE RÉTRACTABLE',
+  spas12: 'CHOKE TACTIQUE',
+  deagle: 'CANON LOURD',
   custom1: 'ARME DU PACK',
   custom2: 'ARME DU PACK',
   custom3: 'ARME DU PACK',
 };
 
-const CLASS_LABEL: Record<ClassId, string> = { assault: 'ASSAUT', cqc: 'CQC', recon: 'RECON' };
+const CLASS_LABEL: Record<ClassId, string> = { assault: 'ASSAUT', cqc: 'CQC', recon: 'RECON', breacher: 'BREACHER' };
 
 /** Timestamp image-par-image « MM:SS:trames » (trames 0-23). */
 function formatRecTimestamp(elapsedMs: number): string {
