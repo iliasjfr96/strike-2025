@@ -22,7 +22,10 @@ interface Overview {
     totalSessions: number;
     uniquePlayers: number;
     today: number;
-    last7: { day: string; sessions: number }[];
+    totalVisits: number;
+    uniqueVisitors: number;
+    todayVisits: number;
+    last7: { day: string; sessions: number; visits: number }[];
   };
   rooms: { id: string; name: string; mapName: string; humans: number; bots: number; phase: string }[];
   maps: { slug: string; name: string; author: string; createdAt: number; objectCount: number; baseEditCount: number }[];
@@ -161,12 +164,36 @@ export default function AdminScreen() {
                     <p className="text-[13px] font-semibold uppercase tracking-[0.16em] text-text-hi">
                       FRÉQUENTATION
                     </p>
+                    {/* Ligne 1 : le site — qui est passé, combien de fois. */}
                     <div className="mt-2 flex gap-3">
                       {(
                         [
-                          [data.stats.uniquePlayers, 'JOUEURS UNIQUES'],
-                          [data.stats.totalSessions, 'SESSIONS DE JEU'],
-                          [data.stats.today, "AUJOURD'HUI"],
+                          [data.stats.uniqueVisitors, 'VISITEURS UNIQUES', '#58A6E8'],
+                          [data.stats.totalVisits, 'VISITES DU SITE', '#58A6E8'],
+                          [data.stats.todayVisits, "VISITES AUJOURD'HUI", '#58A6E8'],
+                        ] as [number, string, string][]
+                      ).map(([value, label, color]) => (
+                        <div
+                          key={label}
+                          className="chamfer-6 flex-1 border border-line bg-[rgba(13,19,26,0.6)] px-3 py-2 text-center"
+                        >
+                          <p
+                            className="font-display text-[22px] font-bold [font-variant-numeric:tabular-nums]"
+                            style={{ color }}
+                          >
+                            {value.toLocaleString('fr-FR')}
+                          </p>
+                          <p className="text-[9px] uppercase tracking-[0.16em] text-text-dim">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Ligne 2 : le jeu — qui a réellement joué. */}
+                    <div className="mt-2 flex gap-3">
+                      {(
+                        [
+                          [data.stats.uniquePlayers, 'ONT JOUÉ'],
+                          [data.stats.totalSessions, 'PARTIES LANCÉES'],
+                          [data.stats.today, "PARTIES AUJOURD'HUI"],
                         ] as [number, string][]
                       ).map(([value, label]) => (
                         <div
@@ -180,19 +207,41 @@ export default function AdminScreen() {
                         </div>
                       ))}
                     </div>
+                    {/* Taux de conversion visiteurs -> joueurs. */}
+                    {data.stats.uniqueVisitors > 0 && (
+                      <p className="mt-2 text-center text-[11px] uppercase tracking-[0.12em] text-text-mid">
+                        CONVERSION :{' '}
+                        <span className="text-text-hi">
+                          {Math.round((data.stats.uniquePlayers / data.stats.uniqueVisitors) * 100)}%
+                        </span>{' '}
+                        DES VISITEURS ONT LANCÉ UNE PARTIE
+                      </p>
+                    )}
                     {data.stats.last7.length > 0 && (
                       <div className="mt-2 flex items-end gap-1.5">
                         {data.stats.last7.map((d) => {
-                          const max = Math.max(...data.stats!.last7.map((x) => x.sessions), 1);
+                          const max = Math.max(
+                            ...data.stats!.last7.map((x) => Math.max(x.visits, x.sessions)),
+                            1,
+                          );
+                          const h = (v: number): number => Math.max(2, Math.round((v / max) * 36));
                           return (
                             <div key={d.day} className="flex flex-1 flex-col items-center gap-0.5">
                               <span className="text-[9px] text-text-mid [font-variant-numeric:tabular-nums]">
-                                {d.sessions}
+                                {d.visits}/{d.sessions}
                               </span>
-                              <span
-                                className="w-full bg-[rgba(245,158,31,0.45)]"
-                                style={{ height: `${Math.max(3, Math.round((d.sessions / max) * 36))}px` }}
-                              />
+                              <span className="flex w-full items-end justify-center gap-[2px]">
+                                <span
+                                  title="visites"
+                                  className="w-1/2 bg-[rgba(88,166,232,0.5)]"
+                                  style={{ height: `${h(d.visits)}px` }}
+                                />
+                                <span
+                                  title="parties"
+                                  className="w-1/2 bg-[rgba(245,158,31,0.55)]"
+                                  style={{ height: `${h(d.sessions)}px` }}
+                                />
+                              </span>
                               <span className="text-[8px] uppercase text-text-dim">{d.day.slice(5)}</span>
                             </div>
                           );
@@ -200,7 +249,9 @@ export default function AdminScreen() {
                       </div>
                     )}
                     <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-text-dim">
-                      1 session = 1 connexion à une partie · joueurs uniques par empreinte anonyme
+                      7 derniers jours — <span className="text-[#58A6E8]">bleu = visites</span> ·{' '}
+                      <span className="text-amber">ambre = parties</span> · robots exclus · empreintes
+                      anonymes (aucune IP stockée)
                     </p>
                   </div>
                 )}

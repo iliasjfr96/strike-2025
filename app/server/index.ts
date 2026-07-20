@@ -19,7 +19,7 @@ import { RateLimiter, clientIp, isAdminReq, logAdminTokenHint } from './Admin.js
 import { attachGame } from './attach.js';
 import { loadMainMapState, saveMainMapState } from './CustomMap.js';
 import { deleteMap, listMaps, loadMap, publishMap } from './MapLibrary.js';
-import { playStats } from './Stats.js';
+import { looksLikeBot, playStats, recordVisit } from './Stats.js';
 
 // État d'édition du salon principal (chargé avant la création des salons).
 const MAIN_MAP_STATE = loadMainMapState();
@@ -652,6 +652,16 @@ const server = createServer((req, res) => {
 
       // Fallback SPA : toute route inconnue renvoie dist/index.html.
       const index = await readFile(path.join(DIST_DIR, 'index.html'));
+      // Statistiques : une VISITE = un chargement de page par un vrai
+      // navigateur (Accept: text/html) qui n'est pas un robot/scanner.
+      const accept = req.headers.accept ?? '';
+      if (
+        req.method === 'GET' &&
+        accept.includes('text/html') &&
+        !looksLikeBot(req.headers['user-agent'])
+      ) {
+        recordVisit(clientIp(req));
+      }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(index);
     } catch (err) {
